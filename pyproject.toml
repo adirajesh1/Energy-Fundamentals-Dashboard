@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gas-forecast"
+version = "0.1.0"
+description = "Modular weekly storage change forecasting for the Gas Market Platform"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas",
+    "plotly",
+    "pyarrow",
+    "requests",
+    "scikit-learn",
+    "statsmodels",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
