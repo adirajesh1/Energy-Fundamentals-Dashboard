@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 import requests
+import numpy as np
 
 OPEN_METEO_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 
@@ -206,3 +207,9 @@ def fetch_all_state_temperatures(
                 time.sleep(pause_seconds)
 
     return pd.concat(frames, ignore_index=True)
+
+def calculate_hdd_cdd(temperatures: pd.DataFrame) -> pd.DataFrame:
+    """Calculate heating and cooling degree days from daily temperatures."""
+    temperatures["hdd"] = np.maximum(0, 65 - temperatures["temperature_f"])
+    temperatures["cdd"] = np.maximum(0, temperatures["temperature_f"] - 65)
+    return temperatures
