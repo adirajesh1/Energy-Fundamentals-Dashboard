@@ -1,4 +1,5 @@
 from gas_forecast.modeling.evaluate import bias, mae, rmse
+from gas_forecast.modeling.interpret import permutation_importance_table
 from gas_forecast.modeling.config import (
     DEFAULT_FEATURE_COLUMNS,
     DEFAULT_FOURIER_HARMONICS,
@@ -33,6 +34,7 @@ __all__ = [
     "build_fourier_model",
     "legacy_forecast_model_configs",
     "mae",
+    "permutation_importance_table",
     "rmse",
     "run_backtest",
     "sklearn_model_configs",

@@ -1,5 +1,29 @@
 # Decision Log
 
+## 2026-06-30 - Add project-facing walkthrough and interpretation
+
+### Decision
+
+Add a top-level README, a polished walkthrough notebook, and a lightweight permutation-importance helper for fitted sklearn models.
+
+### Reason
+
+The project already has enough technical depth for a resume-level forecasting project. The next improvement is making the project easier to understand, rerun, and discuss: one clear README, one narrative notebook, and one interpretation path for explaining model behavior.
+
+### Alternatives considered
+
+- Add more model families before improving presentation.
+- Add new external gas-market variables immediately.
+- Keep project explanation spread across development notebooks.
+
+### Tradeoff
+
+This adds a small amount of documentation and one interpretation helper, but it avoids adding new dependencies or expanding the data model before the current workflow is clear.
+
+### Revisit when
+
+If the walkthrough becomes stale or if new external variables change the core project story.
+
 ## 2026-06-30 - Add analytical feature and model benchmarks
 
 ### Decision
