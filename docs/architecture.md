@@ -38,7 +38,7 @@ The intended architecture separates the project into four stages:
 REGION config
         |
         v
-fetch_weekly_storage_incremental (data/cache/storage/)
+fetch_weekly_storage_incremental (datasets/cache/storage/)
         |
         v
 clean → select_region → calculate change → export processed parquet
@@ -53,7 +53,7 @@ REGION config + storage date range
 load census → select_weather_locations
         |
         v
-fetch_all_state_temperatures incremental (data/cache/weather/by_state/)
+fetch_all_state_temperatures incremental (datasets/cache/weather/by_state/)
         |
         v
 HDD/CDD → aggregate → export processed parquet
@@ -62,7 +62,7 @@ HDD/CDD → aggregate → export processed parquet
 ### Raw cache layout
 
 ```text
-data/cache/
+datasets/cache/
   storage/weekly_storage_raw.parquet
   weather/by_state/{State}.parquet
 ```

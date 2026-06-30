@@ -51,13 +51,13 @@ If yearly requests remain too slow, exceed API limits, or regularly fail.
 
 ### Decision
 
-Raw API responses are cached under `data/cache/` with incremental merge semantics:
+Raw API responses are cached under `datasets/cache/` with incremental merge semantics:
 
 - **Storage:** single `storage/weekly_storage_raw.parquet`; tail re-fetch of the last 8 weeks on each update to capture EIA revisions.
 - **Weather:** per-state `weather/by_state/{state}.parquet`; gap-based fetch for missing prefix/suffix dates only.
 - Shared helpers live in `src/gas_forecast/data/cache.py` (load, atomic write, merge, gap detection).
 
-Processed exports in `data/processed/` remain versioned and are rebuilt from cache each notebook run.
+Processed exports in `datasets/processed/` remain versioned and are rebuilt from cache each notebook run.
 
 ### Reason
 

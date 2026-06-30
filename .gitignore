@@ -15,8 +15,9 @@ __pycache__/
 .ipynb_checkpoints/
 
 # Generated and downloaded data
-data/raw/
-data/cache/
+datasets/cache/
+datasets/processed/
+datasets/raw/
 *.parquet
 
 # Editor files

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-DEFAULT_CACHE_DIR = Path("data/cache")
+DEFAULT_CACHE_DIR = Path("datasets/cache")
 
 
 def load_parquet_cache(path: Path) -> pd.DataFrame:
