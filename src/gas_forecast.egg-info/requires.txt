@@ -1,6 +1,0 @@
-pandas
-plotly
-pyarrow
-requests
-scikit-learn
-statsmodels
