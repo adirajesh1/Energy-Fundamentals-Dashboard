@@ -4,11 +4,27 @@ import hashlib
 import time
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import requests
-import numpy as np
+
+from gas_forecast.data.regions import lower48_excluded_states, region_states
 
 OPEN_METEO_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
+
+CENSUS_POP_URL = (
+    "https://www2.census.gov/geo/docs/reference/"
+    "cenpop2020/CenPop2020_Mean_ST.txt"
+)
+
+_LOCATION_COLUMNS = {
+    "STATEFP",
+    "STNAME",
+    "POPULATION",
+    "LATITUDE",
+    "LONGITUDE",
+    "WEIGHT",
+}
 
 
 def _date_periods(
@@ -208,8 +224,157 @@ def fetch_all_state_temperatures(
 
     return pd.concat(frames, ignore_index=True)
 
+def load_census_state_locations(
+    url: str = CENSUS_POP_URL,
+    *,
+    exclude: frozenset[str] | set[str] | None = None,
+) -> pd.DataFrame:
+    """Load census state centroids and compute national population weights."""
+    if exclude is None:
+        exclude = lower48_excluded_states()
+
+    locations = pd.read_csv(url, dtype={"STATEFP": str})
+    locations = locations.loc[~locations["STNAME"].isin(exclude)].copy()
+    locations["WEIGHT"] = (
+        locations["POPULATION"] / locations["POPULATION"].sum()
+    )
+    return locations.reset_index(drop=True)
+
+
+def select_weather_locations(
+    locations: pd.DataFrame,
+    duoarea: str,
+) -> pd.DataFrame:
+    """Filter census locations to an EIA storage region and renormalize weights."""
+    states = region_states(duoarea)
+    available_states = set(locations["STNAME"].astype(str))
+    missing_states = sorted(states - available_states)
+    if missing_states:
+        raise ValueError(
+            f"Region {duoarea} requires states missing from locations: "
+            f"{missing_states}"
+        )
+
+    selected = locations.loc[locations["STNAME"].isin(states)].copy()
+    selected["WEIGHT"] = selected["POPULATION"] / selected["POPULATION"].sum()
+    validate_weather_locations(selected, expected_states=states)
+    return selected.reset_index(drop=True)
+
+
 def calculate_hdd_cdd(temperatures: pd.DataFrame) -> pd.DataFrame:
     """Calculate heating and cooling degree days from daily temperatures."""
-    temperatures["hdd"] = np.maximum(0, 65 - temperatures["temperature_f"])
-    temperatures["cdd"] = np.maximum(0, temperatures["temperature_f"] - 65)
-    return temperatures
+    df = temperatures.copy()
+    df["hdd"] = np.maximum(0, 65 - df["temperature_f"])
+    df["cdd"] = np.maximum(0, df["temperature_f"] - 65)
+    return df
+
+
+def aggregate_population_weighted_weather(df: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate state-level daily weather to a population-weighted regional index."""
+    required = {"date", "temperature_f", "hdd", "cdd", "population_weight"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Missing required columns: {sorted(missing)}")
+
+    weighted = df.assign(
+        w_temp=df["temperature_f"] * df["population_weight"],
+        w_hdd=df["hdd"] * df["population_weight"],
+        w_cdd=df["cdd"] * df["population_weight"],
+    )
+    return (
+        weighted.groupby("date", as_index=False)
+        .agg(
+            temperature_f=("w_temp", "sum"),
+            hdd=("w_hdd", "sum"),
+            cdd=("w_cdd", "sum"),
+        )
+        .reset_index(drop=True)
+    )
+
+
+def prepare_weather_model_data(
+    weather: pd.DataFrame,
+    duoarea: str,
+) -> pd.DataFrame:
+    """Select and format regional daily weather for modeling."""
+    df = weather.copy()
+    df["date"] = pd.to_datetime(df["date"])
+    df["duoarea"] = duoarea
+    df["year"] = df["date"].dt.year
+    df["month"] = df["date"].dt.month
+    df["day_of_year"] = df["date"].dt.dayofyear
+
+    return df[
+        [
+            "date",
+            "temperature_f",
+            "hdd",
+            "cdd",
+            "year",
+            "month",
+            "day_of_year",
+            "duoarea",
+        ]
+    ].reset_index(drop=True)
+
+
+def validate_weather_locations(
+    locations: pd.DataFrame,
+    *,
+    expected_states: frozenset[str] | set[str] | None = None,
+) -> None:
+    """Validate a locations table used for weather downloads."""
+    missing_cols = _LOCATION_COLUMNS - set(locations.columns)
+    if missing_cols:
+        raise ValueError(f"Missing required columns: {sorted(missing_cols)}")
+
+    if locations["STNAME"].duplicated().any():
+        raise ValueError("Duplicate state names in locations.")
+
+    weight_sum = locations["WEIGHT"].sum()
+    if not np.isclose(weight_sum, 1.0, atol=1e-6):
+        raise ValueError(f"Location weights must sum to 1, got {weight_sum}.")
+
+    if expected_states is not None:
+        actual_states = set(locations["STNAME"].astype(str))
+        if actual_states != set(expected_states):
+            missing = sorted(set(expected_states) - actual_states)
+            extra = sorted(actual_states - set(expected_states))
+            raise ValueError(
+                f"Location states do not match region. "
+                f"Missing: {missing}. Extra: {extra}."
+            )
+
+
+def validate_state_daily_weather(
+    weather: pd.DataFrame,
+    *,
+    expected_states: frozenset[str] | set[str] | None = None,
+) -> None:
+    """Validate state-level daily weather before regional aggregation."""
+    required = {
+        "date",
+        "temperature_f",
+        "state",
+        "population",
+        "population_weight",
+    }
+    missing_cols = required - set(weather.columns)
+    if missing_cols:
+        raise ValueError(f"Missing required columns: {sorted(missing_cols)}")
+
+    if weather["temperature_f"].isna().any():
+        raise ValueError("Found missing values in 'temperature_f'.")
+
+    if weather.duplicated(subset=["date", "state"]).any():
+        raise ValueError("Found duplicate date/state rows.")
+
+    if expected_states is not None:
+        actual_states = set(weather["state"].astype(str))
+        if actual_states != set(expected_states):
+            missing = sorted(set(expected_states) - actual_states)
+            extra = sorted(actual_states - set(expected_states))
+            raise ValueError(
+                f"Weather states do not match region. "
+                f"Missing: {missing}. Extra: {extra}."
+            )

@@ -9,6 +9,7 @@ src/gas_forecast.egg-info/requires.txt
 src/gas_forecast.egg-info/top_level.txt
 src/gas_forecast/data/__init__.py
 src/gas_forecast/data/export.py
+src/gas_forecast/data/regions.py
 src/gas_forecast/data/storage.py
 src/gas_forecast/data/weather.py
 src/gas_forecast/models/__init__.py
