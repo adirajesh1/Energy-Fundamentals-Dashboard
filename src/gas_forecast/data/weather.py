@@ -98,8 +98,11 @@ def _fetch_state_temperatures_incremental(
     pause_seconds: float = 3.0,
     max_retries: int = 8,
     base_delay: float = 5.0,
-) -> pd.DataFrame:
-    """Fetch daily temperatures for one state using a rolling per-state cache."""
+) -> tuple[pd.DataFrame, bool]:
+    """Fetch daily temperatures for one state using a rolling per-state cache.
+
+    Returns the requested date-range frame and whether any API requests were made.
+    """
     state_name = str(location["STNAME"])
     cache_path = _state_cache_path(cache_dir, state_name)
     location_df = pd.DataFrame([location])
@@ -123,6 +126,8 @@ def _fetch_state_temperatures_incremental(
     for gap_start, gap_end in gaps:
         for period_start, period_end in _gap_fetch_periods(gap_start, gap_end):
             request_periods.append((state_name, period_start, period_end))
+
+    fetched = bool(request_periods)
 
     for index, (_, period_start, period_end) in enumerate(request_periods):
         print(f"{state_name}: fetching {period_start} to {period_end}")
@@ -156,9 +161,10 @@ def _fetch_state_temperatures_incremental(
 
     range_start = pd.Timestamp(start_date)
     range_end = pd.Timestamp(end_date)
-    return merged[
+    result = merged[
         (merged["date"] >= range_start) & (merged["date"] <= range_end)
     ].reset_index(drop=True)
+    return result, fetched
 
 
 def migrate_weather_chunk_cache(
@@ -330,7 +336,7 @@ def fetch_all_state_temperatures(
 
         frames: list[pd.DataFrame] = []
         for index, (_, location) in enumerate(locations.iterrows()):
-            state_frame = _fetch_state_temperatures_incremental(
+            state_frame, fetched = _fetch_state_temperatures_incremental(
                 location,
                 start_date,
                 end_date,
@@ -341,7 +347,7 @@ def fetch_all_state_temperatures(
                 base_delay=base_delay,
             )
             frames.append(state_frame)
-            if index + 1 < len(locations):
+            if fetched and index + 1 < len(locations):
                 time.sleep(pause_seconds)
 
         if not frames:
@@ -486,6 +492,107 @@ def prepare_weather_model_data(
             "duoarea",
         ]
     ].reset_index(drop=True)
+
+
+def assign_storage_week_end(dates: pd.Series) -> pd.Series:
+    """
+    Map each calendar day to the EIA storage week-ending Friday.
+
+    Each week spans Saturday through Friday (inclusive), matching the
+    convention used for weekly natural gas storage reporting.
+    """
+    dates = pd.to_datetime(dates)
+    if isinstance(dates, pd.DatetimeIndex):
+        weekdays = dates.weekday
+    else:
+        weekdays = dates.dt.weekday
+    days_to_friday = (4 - weekdays) % 7
+    return dates + pd.to_timedelta(days_to_friday, unit="D")
+
+
+def aggregate_weather_to_storage_weeks(
+    daily: pd.DataFrame,
+    *,
+    drop_incomplete: bool = True,
+    expected_days: int = 7,
+) -> pd.DataFrame:
+    """Aggregate regional daily weather into EIA storage weeks (Sat–Fri)."""
+    required = {"date", "temperature_f", "hdd", "cdd"}
+    missing = required - set(daily.columns)
+    if missing:
+        raise ValueError(f"Missing required columns: {sorted(missing)}")
+
+    df = daily.copy()
+    df["date"] = pd.to_datetime(df["date"])
+    df["storage_week_end"] = assign_storage_week_end(df["date"])
+
+    weekly = (
+        df.groupby("storage_week_end", as_index=False)
+        .agg(
+            temperature_f=("temperature_f", "mean"),
+            hdd=("hdd", "sum"),
+            cdd=("cdd", "sum"),
+            weather_days=("date", "count"),
+        )
+        .rename(columns={"storage_week_end": "date"})
+    )
+
+    if drop_incomplete:
+        weekly = weekly.loc[weekly["weather_days"] == expected_days].copy()
+
+    return weekly.reset_index(drop=True)
+
+
+def prepare_weekly_weather_model_data(
+    weather: pd.DataFrame,
+    duoarea: str,
+) -> pd.DataFrame:
+    """Select and format regional weekly weather aligned to storage weeks."""
+    df = weather.copy()
+    df["date"] = pd.to_datetime(df["date"])
+    df["duoarea"] = duoarea
+    df["year"] = df["date"].dt.year
+    df["month"] = df["date"].dt.month
+    df["week_of_year"] = df["date"].dt.isocalendar().week.astype(int)
+
+    return df[
+        [
+            "date",
+            "temperature_f",
+            "hdd",
+            "cdd",
+            "weather_days",
+            "year",
+            "month",
+            "week_of_year",
+            "duoarea",
+        ]
+    ].reset_index(drop=True)
+
+
+def validate_weekly_weather(weather: pd.DataFrame) -> None:
+    """Validate weekly weather aligned to storage reporting weeks."""
+    required = {
+        "date",
+        "temperature_f",
+        "hdd",
+        "cdd",
+        "weather_days",
+        "duoarea",
+    }
+    missing_cols = required - set(weather.columns)
+    if missing_cols:
+        raise ValueError(f"Missing required columns: {sorted(missing_cols)}")
+
+    if weather["date"].duplicated().any():
+        raise ValueError("Found duplicate weekly weather dates.")
+
+    if not weather["date"].dt.weekday.eq(4).all():
+        raise ValueError("Weekly weather dates must fall on Friday.")
+
+    if (weather["weather_days"] != 7).any():
+        n_bad = (weather["weather_days"] != 7).sum()
+        raise ValueError(f"Found {n_bad} weeks without exactly 7 weather days.")
 
 
 def validate_weather_locations(

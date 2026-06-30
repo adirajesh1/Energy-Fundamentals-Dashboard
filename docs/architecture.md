@@ -56,7 +56,7 @@ load census → select_weather_locations
 fetch_all_state_temperatures incremental (datasets/cache/weather/by_state/)
         |
         v
-HDD/CDD → aggregate → export processed parquet
+HDD/CDD → aggregate daily → aggregate to storage weeks → export processed parquet
 ```
 
 ### Raw cache layout
