@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 from sklearn.base import BaseEstimator, RegressorMixin
 
 from gas_forecast.modeling.splitters import ExpandingWindowSplitter
@@ -63,6 +64,8 @@ def test_run_backtest_clones_model_and_returns_predictions_and_metrics():
         "forecast_deviation",
     }.issubset(predictions.columns)
     assert metrics["fold"].tolist() == [1, 2, 3, "overall"]
+    assert not metrics[["mae", "rmse", "bias"]].isna().any().any()
+    assert metrics.loc[0, "mae"] == pytest.approx(7.0)
 
 
 def test_run_backtest_does_not_mutate_input_or_create_lag_features():

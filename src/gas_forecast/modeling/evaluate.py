@@ -1,25 +1,25 @@
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
+from sklearn.metrics import mean_absolute_error, root_mean_squared_error
+
+
+def _as_1d_float_array(values) -> np.ndarray:
+    return np.asarray(values, dtype="float64").ravel()
 
 
 def mae(y_true, y_pred) -> float:
     """Return mean absolute error."""
-    true = pd.Series(y_true, dtype="float64")
-    pred = pd.Series(y_pred, dtype="float64")
-    return float((true - pred).abs().mean())
+    return float(mean_absolute_error(_as_1d_float_array(y_true), _as_1d_float_array(y_pred)))
 
 
 def rmse(y_true, y_pred) -> float:
     """Return root mean squared error."""
-    true = pd.Series(y_true, dtype="float64")
-    pred = pd.Series(y_pred, dtype="float64")
-    return float(np.sqrt(((true - pred) ** 2).mean()))
+    return float(root_mean_squared_error(_as_1d_float_array(y_true), _as_1d_float_array(y_pred)))
 
 
 def bias(y_true, y_pred) -> float:
     """Return average forecast error, actual minus predicted."""
-    true = pd.Series(y_true, dtype="float64")
-    pred = pd.Series(y_pred, dtype="float64")
+    true = _as_1d_float_array(y_true)
+    pred = _as_1d_float_array(y_pred)
     return float((true - pred).mean())
