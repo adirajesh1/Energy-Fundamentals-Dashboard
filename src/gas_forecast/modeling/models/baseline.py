@@ -1,6 +1,7 @@
 import pandas as pd
 
-from gas_forecast.models.base import WeeklyChangeForecastModel
+from gas_forecast.modeling.models.base import WeeklyChangeForecastModel
+from gas_forecast.modeling.models.training import select_training_history
 
 
 class FiveYearWeeklyAverageModel(WeeklyChangeForecastModel):
@@ -15,11 +16,10 @@ class FiveYearWeeklyAverageModel(WeeklyChangeForecastModel):
         return f"{self.lookback_years}-Year Weekly Average"
 
     def fit(self, storage: pd.DataFrame) -> "FiveYearWeeklyAverageModel":
-        latest_year = storage["year"].max()
-        training = storage[
-            (storage["year"] >= latest_year - self.lookback_years)
-            & (storage["year"] <= latest_year - 1)
-        ]
+        training = select_training_history(
+            storage,
+            lookback_years=self.lookback_years,
+        )
         self._weekly_profile = (
             training.groupby("week_of_year")["weekly_change_bcf"]
             .agg(predicted_weekly_change="mean", weekly_change_std="std")

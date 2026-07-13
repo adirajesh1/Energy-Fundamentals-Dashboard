@@ -5,6 +5,12 @@ from gas_forecast.data.cache import (
     merge_timeseries,
     write_parquet_cache,
 )
+from gas_forecast.data.balance_asof import (
+    BALANCE_ASOF_FEATURE_COLUMNS,
+    build_asof_balance_features,
+    latest_balance_as_of,
+    validate_balance_vintages,
+)
 from gas_forecast.data.export import save_versioned_parquet
 from gas_forecast.data.features import (
     BASE_MODEL_COLUMNS,
@@ -26,8 +32,14 @@ from gas_forecast.data.paths import (
     DEFAULT_PROCESSED_DIR,
     latest_processed_path,
     weather_cache_dir,
+    resolve_api_key,
 )
-from gas_forecast.data.regions import region_slug, region_states, supported_storage_regions
+from gas_forecast.data.regions import (
+    region_label,
+    region_slug,
+    region_states,
+    supported_storage_regions,
+)
 from gas_forecast.data.storage_api import (
     fetch_weekly_storage_incremental,
     fetch_weekly_storage_raw,
@@ -58,9 +70,16 @@ from gas_forecast.data.weather_validation import (
     validate_weather_locations,
     validate_weekly_weather,
 )
+from gas_forecast.data.weather_scenarios import (
+    WEATHER_SCENARIO_COLUMNS,
+    select_weather_scenario_as_of,
+    validate_weather_scenarios,
+)
 
 __all__ = [
     "DEFAULT_CACHE_DIR",
+    "BALANCE_ASOF_FEATURE_COLUMNS",
+    "WEATHER_SCENARIO_COLUMNS",
     "aggregate_population_weighted_weather",
     "aggregate_weather_to_storage_weeks",
     "assign_storage_week_end",
@@ -83,9 +102,11 @@ __all__ = [
     "add_calendar_features",
     "add_storage_features",
     "add_weather_features",
+    "build_asof_balance_features",
     "build_weekly_model_features",
     "join_weather_storage",
     "latest_processed_path",
+    "latest_balance_as_of",
     "load_census_state_locations",
     "load_parquet_cache",
     "merge_timeseries",
@@ -93,15 +114,20 @@ __all__ = [
     "prepare_weather_model_data",
     "prepare_weekly_weather_model_data",
     "region_slug",
+    "region_label",
     "region_states",
     "save_versioned_parquet",
     "select_region",
+    "select_weather_scenario_as_of",
     "select_weather_locations",
     "supported_storage_regions",
     "validate_state_daily_weather",
+    "validate_balance_vintages",
     "validate_weather_locations",
     "validate_weekly_model_features",
     "validate_weekly_weather",
+    "validate_weather_scenarios",
     "weather_cache_dir",
     "write_parquet_cache",
+    "resolve_api_key",
 ]

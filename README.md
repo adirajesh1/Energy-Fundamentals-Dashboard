@@ -20,7 +20,8 @@ Weekly storage changes are a useful gas-market signal because they reflect seaso
 4. Aligns weather to EIA Friday storage weeks.
 5. Builds model-ready weekly features.
 6. Backtests multiple forecasting models with time-aware splits.
-7. Produces metrics and forecast-error plots.
+7. Selects archived weather scenarios and balance vintages at a forecast origin.
+8. Produces point metrics, calibrated intervals, coverage diagnostics, and forecast-error plots.
 
 ## Architecture
 
@@ -49,8 +50,7 @@ src/gas_forecast/
   cli.py                  Command-line data refresh entry point
   pipelines/data.py       Storage, weather, and feature pipeline orchestration
   data/                   API access, cache behavior, transforms, validation, features
-  models/                 Interpretable baseline forecast classes
-  modeling/               Sklearn-style splitters, trainer, metrics, configs
+  modeling/               Unified modeling package (concrete models, splitters, backtest, metrics, configs)
   plotting.py             Plotly forecast diagnostics
 ```
 
@@ -73,10 +73,10 @@ It combines weekly storage, weekly weather, and engineered features such as:
 
 ## Modeling Approach
 
-The project uses two modeling layers:
+The data-availability contract for forecasts and backtests is documented in
+[`docs/modeling_assumptions.md`](docs/modeling_assumptions.md).
 
-- `gas_forecast.models`: interpretable baseline model classes, useful for explaining the forecasting problem.
-- `gas_forecast.modeling`: the preferred sklearn-style backtesting layer for comparing models on the shared feature table.
+- `gas_forecast.modeling`: the unified modeling package containing concrete model implementations, splitters, backtest runners, evaluation metrics, and configuration grids.
 
 The sklearn-style layer supports any estimator with:
 
@@ -113,6 +113,21 @@ It returns:
 - `predictions_df`: dates, actuals, predictions, fold IDs, and forecast deviations.
 - `metrics_df`: MAE, RMSE, bias, and fold sizes.
 
+For multi-week paths, use `run_recursive_backtest`. Its default `seasonal`
+input mode uses only information available before each forecast origin. Its
+`observed` mode is an explicit realized-weather diagnostic and should not be
+reported as an operational forecast result.
+
+Use `forecast_input_mode="scenario"` with a versioned weekly weather archive to
+replay the actual forecast information set. Each archive row needs `date`,
+`duoarea`, `issued_at`, `temperature_f`, `hdd`, `cdd`, and `weather_days`.
+Only the latest version with `issued_at <= forecast origin` is used.
+
+Pass `interval_coverage=0.80` to either backtest runner to attach symmetric
+conformal intervals. They are calibrated from earlier out-of-fold residuals
+only. The returned predictions include interval bounds and calibration sample
+counts; the metrics include empirical coverage, tail-miss rates, and width.
+
 ## How To Run
 
 Install in editable mode:
@@ -145,6 +160,22 @@ Run only selected pipeline stages:
 gas-data refresh --region R48 --only storage,weather,features
 ```
 
+Select a materialized weather scenario from a parquet archive:
+
+```bash
+gas-data weather-scenario --region R48 --scenarios-path weather_vintages.parquet --as-of 2025-01-03T00:00:00Z
+```
+
+Build point-in-time balance features from a genuine historical vintage archive:
+
+```bash
+gas-data balance-asof --region R48 --vintages-path balance_vintages.parquet
+```
+
+The balance archive must include `date`, `duoarea`, `available_at`,
+`local_balance`, and `net_inflow_balancing`. It is intentionally separate from
+the retrospective output of `gas-data balance`.
+
 ## Recommended Walkthrough
 
 Start with:
@@ -172,7 +203,7 @@ The most useful result is not just one model score. It is the comparison between
 
 That comparison shows whether added complexity improves the forecast enough to justify itself.
 
-Example expanding-window result on the current Lower 48 feature table:
+Example one-step retrospective result on the current Lower 48 feature table:
 
 | Model | MAE | RMSE | Bias | Validation rows |
 | --- | ---: | ---: | ---: | ---: |
@@ -181,12 +212,19 @@ Example expanding-window result on the current Lower 48 feature table:
 | Ridge | 15.47 | 21.07 | -0.41 | 286 |
 | Random Forest | 15.52 | 20.77 | -3.69 | 286 |
 
-In this run, the simple linear model performs best. That is a useful modeling result: for this weekly dataset and default feature set, added nonlinear complexity does not automatically improve error.
+These scores use realized target-week weather from the historical feature table,
+so they are diagnostic upper bounds rather than operational forecast scores. In
+this run, the simple linear model performs best. That is still useful evidence:
+for this weekly dataset and default feature set, added nonlinear complexity does
+not automatically improve error.
 
 ## Limitations
 
-- Weather inputs are historical weather, not weather forecasts.
+- The core weather pipeline still downloads realized historical weather. Live
+  weather scenarios require a separately collected, versioned provider archive.
 - The current project forecasts weekly storage changes, not natural gas prices.
-- The model does not yet include production, LNG exports, pipeline flows, power burn, or Henry Hub prices.
-- Recursive multi-step forecasting is intentionally not implemented yet.
+- The balance disaggregation output remains retrospective. The as-of pipeline
+  is usable only when source vintages retain real `available_at` timestamps.
+- Conformal intervals describe empirical error coverage, not a structural
+  probability model; coverage should be monitored by horizon and refreshed.
 - Weekly data gives a relatively small sample size, so simple baselines remain important.

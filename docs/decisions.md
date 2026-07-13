@@ -1,5 +1,79 @@
 # Decision Log
 
+## 2026-07-12 - Require Explicit Vintages for Operational Inputs and Intervals
+
+### Decision
+
+Add provider-neutral weather-scenario and balance-vintage input contracts rather
+than infer historical availability. Add conformal intervals that calibrate only
+on earlier out-of-fold residuals and report empirical coverage by evaluation
+group.
+
+### Reason
+
+The existing seasonal fallback is operationally honest but cannot measure the
+incremental value of actual forecasts. Conversely, using realized weather or
+revised balances in historical validation would overstate forecast skill.
+Explicit `issued_at` and `available_at` fields make the information set
+inspectable. Conformal intervals provide a practical uncertainty baseline whose
+coverage can be monitored without claiming a fully specified distribution.
+
+### Alternatives considered
+
+- Assume a fixed weather or monthly-source publication lag.
+- Treat current balance artifacts as historical vintages.
+- Use quantile-model outputs without checking realized coverage.
+
+### Tradeoff
+
+The new pipelines require an externally collected history of forecast and
+balance revisions; they do not produce that history from present-day APIs.
+Intervals are empirical and may become miscalibrated when market behavior
+changes, so they need coverage monitoring and periodic recalibration.
+
+### Revisit when
+
+When a specific provider archive and balance-vintage source are adopted. At
+that point, add ingestion adapters and compare scenario and balance models to
+the seasonal benchmark by forecast horizon.
+
+## 2026-07-12 - Make Forecast Input Availability Explicit
+
+### Decision
+
+Use strict historical holdouts for legacy model evaluation and default recursive
+backtests to seasonal target-week inputs calculated from data before each
+forecast origin. Keep realized target-week inputs as an explicit oracle
+diagnostic. Exclude retrospective balance-sheet lag features from the default
+dashboard forecast until an as-of data pipeline exists.
+
+### Reason
+
+Chronological train/validation splits alone did not prevent a recursive
+backtest from reading realized validation weather and balance values. That
+overstated the performance of a live forecast. The balance sheet also depends
+on lagged and revised monthly data, so its historical estimates are not yet a
+valid real-time feature source.
+
+### Alternatives considered
+
+- Continue reporting realized-weather backtests as the default forecast score.
+- Remove recursive forecasting rather than make its input assumptions explicit.
+- Keep balance lags in the dashboard model without an as-of reconstruction.
+
+### Tradeoff
+
+Seasonal-input error is materially larger, and the current default model is a
+less impressive operational forecast. The result is still more useful because
+it has a clear information-set definition and makes the next data priorities
+visible.
+
+### Revisit when
+
+When archived weather forecasts and as-of monthly balance data are available.
+At that point, compare their incremental value against the seasonal-input
+benchmark using the same rolling-origin protocol.
+
 ## 2026-06-30 - Add project-facing walkthrough and interpretation
 
 ### Decision

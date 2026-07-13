@@ -1,4 +1,4 @@
-from gas_forecast.modeling.evaluate import bias, mae, rmse
+from gas_forecast.modeling.evaluation import bias, mae, rmse
 from gas_forecast.modeling.interpret import permutation_importance_table
 from gas_forecast.modeling.config import (
     DEFAULT_FEATURE_COLUMNS,
@@ -17,7 +17,17 @@ from gas_forecast.modeling.splitters import (
     HoldoutSplitter,
     RollingWindowSplitter,
 )
-from gas_forecast.modeling.trainer import run_backtest
+from gas_forecast.modeling.backtesting import run_backtest, run_recursive_backtest
+from gas_forecast.modeling.forecaster import (
+    RECURSIVE_FEATURE_COLUMNS,
+    ForecastInputMode,
+    RecursiveForecaster,
+)
+from gas_forecast.modeling.intervals import (
+    ConformalIntervalCalibrator,
+    add_rolling_conformal_intervals,
+    interval_metrics,
+)
 
 __all__ = [
     "ExpandingWindowSplitter",
@@ -37,5 +47,12 @@ __all__ = [
     "permutation_importance_table",
     "rmse",
     "run_backtest",
+    "run_recursive_backtest",
     "sklearn_model_configs",
+    "RecursiveForecaster",
+    "ForecastInputMode",
+    "RECURSIVE_FEATURE_COLUMNS",
+    "ConformalIntervalCalibrator",
+    "add_rolling_conformal_intervals",
+    "interval_metrics",
 ]

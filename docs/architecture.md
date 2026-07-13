@@ -46,12 +46,13 @@ notebooks/               Exploratory and narrative analysis
 datasets/                Local generated data, ignored by git
 plots/                   Generated visual artifacts
 docs/                    Architecture notes and decision records
-dashboard/               Reserved for an app/dashboard layer
+dashboard/               Streamlit balance-analysis and forecast UI
 db/                      Reserved for persistent database work
 models/                  Reserved for trained model artifacts
 ```
 
-The empty top-level `dashboard`, `db`, and `models` directories are placeholders. If they remain unused, either document their intended ownership or remove them to reduce ambiguity.
+The `db/` and `models/` directories are placeholders. Either document their
+ownership when they gain runtime responsibilities or remove them.
 
 ## Package modules
 
@@ -59,9 +60,12 @@ The empty top-level `dashboard`, `db`, and `models` directories are placeholders
 | --- | --- |
 | `gas_forecast.cli` | Command-line entry point for data refresh workflows. |
 | `gas_forecast.pipelines.data` | Orchestrates storage, weather, and feature pipelines. |
+| `gas_forecast.pipelines.asof` | Materializes selected weather scenarios and balance lag features from historical vintages. |
+| `gas_forecast.data.weather_scenarios` | Validates and selects the latest regional weather forecast known at an origin. |
+| `gas_forecast.data.balance_asof` | Validates balance vintages and builds point-in-time lag features. |
 | `gas_forecast.data.cache` | Shared parquet cache loading, atomic writing, time-series merging, and date-gap detection. |
 | `gas_forecast.data.paths` | Canonical local paths for cache and processed artifacts. |
-| `gas_forecast.data.regions` | EIA storage-region definitions, state membership, and filesystem-safe slugs. |
+| `gas_forecast.data.regions` | Canonical EIA storage-region definitions, labels, state membership, and filesystem-safe slugs. |
 | `gas_forecast.data.storage` | Compatibility facade that keeps older storage imports working. |
 | `gas_forecast.data.storage_api` | EIA storage API access, pagination, and raw incremental cache refresh. |
 | `gas_forecast.data.storage_transforms` | Storage cleaning, region selection, weekly change calculation, and model-data formatting. |
@@ -74,9 +78,10 @@ The empty top-level `dashboard`, `db`, and `models` directories are placeholders
 | `gas_forecast.data.weather_validation` | Weather/location dataframe validators. |
 | `gas_forecast.data.features` | Joins weekly storage/weather data and builds model-ready calendar, weather, and storage lag features. |
 | `gas_forecast.data.export` | Versioned parquet export with optional latest-file aliases. |
-| `gas_forecast.models` | Forecast model interface and implementations. |
-| `gas_forecast.modeling` | Scikit-learn-style splitters, backtest runner, reusable metrics, and shared model experiment configs. |
-| `gas_forecast.evaluation` | Fits models for an evaluation year and returns forecast diagnostics. |
+| `gas_forecast.modeling.forecaster` | Recursive storage-state simulation with seasonal, archived-scenario, or observed input modes. |
+| `gas_forecast.modeling.backtesting` | One-step and recursive chronological backtest runners with optional conformal intervals. |
+| `gas_forecast.modeling.intervals` | Conformal interval calibration and empirical coverage diagnostics. |
+| `gas_forecast.modeling.models` | Legacy seasonal models, a shared fit-history selector, and balance disaggregation components. |
 | `gas_forecast.plotting` | Standard Plotly forecast visualizations. |
 
 ## Entry points
@@ -94,6 +99,8 @@ Current command:
 ```text
 gas-data refresh --region R48
 gas-data refresh --all-regions
+gas-data weather-scenario --region R48 --scenarios-path weather_vintages.parquet --as-of 2025-01-03T00:00:00Z
+gas-data balance-asof --region R48 --vintages-path balance_vintages.parquet
 ```
 
 Optional flags control stage selection, cache directories, processed output directories, storage revision windows, Open-Meteo request pacing, and legacy weather-cache migration.
@@ -176,11 +183,19 @@ Current implementations:
 - `WeeklyChangeFourierRegressionModel`
 - `WeeklyChangeSARIMAModel`
 
-`evaluate_forecast` selects the requested evaluation year, fits the model using data no later than that year, and attaches predictions, deviations, and optional band/outside-band diagnostics.
+`evaluate_forecast` selects the requested evaluation year, fits the model using
+only earlier years, and attaches predictions, deviations, and optional
+band/outside-band diagnostics.
 
 The newer `gas_forecast.modeling` package is the preferred path for sklearn-style experiments. It expects prebuilt feature rows, uses splitter objects for holdout or rolling backtests, clones and fits any sklearn-compatible estimator per fold, and returns prediction/metric tables that notebooks can graph.
 
 Shared model choices live in `gas_forecast.modeling.config`. Use this module for reusable model factories, default feature columns, target column names, Fourier harmonic grids, and default sklearn estimators instead of hard-coding model definitions in notebooks. The feature table includes calendar cycles, weather lags/rolling averages, storage lags/rolling averages, storage surplus/deficit measures, and season flags.
+
+`run_recursive_backtest` defaults to seasonal target-week inputs calculated
+from historical rows before each origin. It can instead select archived weather
+scenarios by `issued_at`; its observed-input mode is an oracle diagnostic. Both
+backtest runners can add conformal intervals calibrated on earlier out-of-fold
+errors. See `docs/modeling_assumptions.md` for the full timing contract.
 
 ## Testing
 
@@ -193,7 +208,11 @@ Current test focus:
 - incomplete weather-week dropping;
 - grouped storage change calculation;
 - feature lags that do not leak across regions;
-- evaluation-year handling that excludes future years.
+- strict evaluation-year holdouts and model fit-history handling.
+- recursive seasonal-input behavior and unsupported-feature rejection.
+- weather-scenario version selection and point-in-time balance revisions.
+- conformal interval calibration and coverage metrics.
+- canonical EIA region labels and alias handling.
 - modeling splitters and sklearn-style backtest behavior.
 
 Run tests with:
@@ -221,4 +240,5 @@ python -m pip install -e ".[dev]"
 ## Known improvement areas
 
 - Notebook orchestration should keep moving toward pipeline calls.
-- Placeholder top-level folders should either gain documented ownership or be removed.
+- Collect and retain a real archived weather-forecast feed for operational scenarios.
+- Collect source balance vintages with publication timestamps before promoting balance lags into a default model.

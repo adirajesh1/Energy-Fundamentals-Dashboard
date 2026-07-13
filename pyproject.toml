@@ -14,6 +14,8 @@ dependencies = [
     "requests",
     "scikit-learn",
     "statsmodels",
+    "streamlit",
+    "google-generativeai",
 ]
 
 [project.scripts]

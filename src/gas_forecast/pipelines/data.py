@@ -18,6 +18,7 @@ from gas_forecast.data.paths import (
     DEFAULT_PROCESSED_DIR,
     latest_processed_path,
     weather_cache_dir,
+    resolve_api_key,
 )
 from gas_forecast.data.regions import region_slug, region_states, supported_storage_regions
 from gas_forecast.data.storage_api import fetch_weekly_storage_incremental
@@ -60,24 +61,7 @@ class PipelineOutputs:
     frames: dict[str, pd.DataFrame] = field(default_factory=dict)
 
 
-def _resolve_api_key(api_key: str | None) -> str:
-    if api_key:
-        return api_key
 
-    try:
-        from dotenv import load_dotenv
-
-        load_dotenv("local.env")
-    except ImportError:
-        pass
-
-    resolved = os.getenv("EIA_API_KEY")
-    if not resolved:
-        raise ValueError(
-            "EIA API key required. Pass api_key= or set EIA_API_KEY in the "
-            "environment (optionally via local.env with python-dotenv installed)."
-        )
-    return resolved
 
 
 def _load_storage_for_region(processed_dir: Path, region: str) -> pd.DataFrame:
@@ -106,7 +90,7 @@ def run_storage_pipeline(
     cache_dir = Path(cache_dir)
     processed_dir = Path(processed_dir)
     slug = region_slug(region)
-    key = _resolve_api_key(api_key)
+    key = resolve_api_key(api_key)
 
     storage_raw = fetch_weekly_storage_incremental(
         key,

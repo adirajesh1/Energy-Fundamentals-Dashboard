@@ -3,7 +3,7 @@ import pytest
 from sklearn.base import BaseEstimator, RegressorMixin
 
 from gas_forecast.modeling.splitters import ExpandingWindowSplitter
-from gas_forecast.modeling.trainer import run_backtest
+from gas_forecast.modeling.backtesting import run_backtest
 
 
 class MeanRegressor(BaseEstimator, RegressorMixin):
@@ -91,3 +91,42 @@ def test_run_backtest_does_not_mutate_input_or_create_lag_features():
     pd.testing.assert_frame_equal(df, original)
     assert "weekly_change_lag1" in df.columns
     assert "weekly_change_lag1" not in predictions.columns
+
+
+def test_run_backtest_with_lightgbm_and_xgboost_if_installed():
+    from gas_forecast.modeling.config import sklearn_model_configs
+
+    df = _training_frame()
+    splitter = ExpandingWindowSplitter(
+        "date",
+        initial_train_start="2024-01-05",
+        initial_train_end="2024-01-26",
+        val_weeks=1,
+        step_weeks=1,
+    )
+
+    configs = {c.key: c for c in sklearn_model_configs()}
+
+    if "lightgbm" in configs:
+        predictions, metrics = run_backtest(
+            df,
+            feature_cols=["feature"],
+            target_col="weekly_change_bcf",
+            date_col="date",
+            model=configs["lightgbm"].build(),
+            splitter=splitter,
+        )
+        assert not predictions.empty
+        assert not metrics.empty
+
+    if "xgboost" in configs:
+        predictions, metrics = run_backtest(
+            df,
+            feature_cols=["feature"],
+            target_col="weekly_change_bcf",
+            date_col="date",
+            model=configs["xgboost"].build(),
+            splitter=splitter,
+        )
+        assert not predictions.empty
+        assert not metrics.empty

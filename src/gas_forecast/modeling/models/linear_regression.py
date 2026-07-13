@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 
-from gas_forecast.models._training import holdout_training_frame
-from gas_forecast.models.base import WeeklyChangeForecastModel
+from gas_forecast.modeling.models.base import WeeklyChangeForecastModel
+from gas_forecast.modeling.models.training import select_training_history
 
 
 def _fourier_features(
@@ -50,7 +50,10 @@ class WeeklyChangeLinearRegressionModel(WeeklyChangeForecastModel):
         return "Linear Regression (seasonal)"
 
     def fit(self, storage: pd.DataFrame) -> "WeeklyChangeLinearRegressionModel":
-        train, _ = holdout_training_frame(storage, lookback_years=self.lookback_years)
+        train = select_training_history(
+            storage,
+            lookback_years=self.lookback_years,
+        )
         train = train.dropna(subset=["weekly_change_bcf"])
 
         features = _seasonal_features(train)
@@ -97,7 +100,10 @@ class WeeklyChangeFourierRegressionModel(WeeklyChangeForecastModel):
         return f"Fourier Regression (K={self.n_harmonics})"
 
     def fit(self, storage: pd.DataFrame) -> "WeeklyChangeFourierRegressionModel":
-        train, _ = holdout_training_frame(storage, lookback_years=self.lookback_years)
+        train = select_training_history(
+            storage,
+            lookback_years=self.lookback_years,
+        )
         train = train.dropna(subset=["weekly_change_bcf"])
 
         features = _fourier_features(

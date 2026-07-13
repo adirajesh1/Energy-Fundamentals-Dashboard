@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 
-from gas_forecast.modeling.evaluate import bias, mae, rmse
+from gas_forecast.modeling.evaluation import bias, mae, rmse
 
 
 def test_modeling_metrics_calculate_expected_values():

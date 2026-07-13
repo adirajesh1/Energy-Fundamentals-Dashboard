@@ -15,6 +15,9 @@ def clean_weekly_storage(raw_df, start_date=None, end_date=None):
     df["value"] = pd.to_numeric(df["value"], errors="coerce")
     df["series-description"] = df["series-description"].astype(str)
 
+    if "series" in df.columns:
+        df = df[df["series"].str.contains("_SWO_")]
+
     if start_date is not None:
         df = df[df["period"] >= pd.to_datetime(start_date)]
 

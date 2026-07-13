@@ -1,7 +1,7 @@
 import pandas as pd
 
-from gas_forecast.evaluation import evaluate_forecast
-from gas_forecast.models.base import WeeklyChangeForecastModel
+from gas_forecast.modeling.evaluation import evaluate_forecast
+from gas_forecast.modeling.models import WeeklyChangeForecastModel
 
 
 class RecordingModel(WeeklyChangeForecastModel):
@@ -20,7 +20,7 @@ class RecordingModel(WeeklyChangeForecastModel):
         return pd.DataFrame({"predicted_weekly_change": [0.0] * len(evaluation)})
 
 
-def test_evaluate_forecast_does_not_fit_on_years_after_requested_year():
+def test_evaluate_forecast_fits_only_years_before_requested_year():
     storage = pd.DataFrame(
         {
             "date": pd.to_datetime(["2022-01-07", "2023-01-06", "2024-01-05"]),
@@ -33,4 +33,4 @@ def test_evaluate_forecast_does_not_fit_on_years_after_requested_year():
 
     evaluate_forecast(storage, model, year=2023)
 
-    assert model.fit_years == [2022, 2023]
+    assert model.fit_years == [2022]

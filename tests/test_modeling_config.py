@@ -10,7 +10,7 @@ from gas_forecast.modeling.config import (
     legacy_forecast_model_configs,
     sklearn_model_configs,
 )
-from gas_forecast.models import (
+from gas_forecast.modeling.models import (
     FiveYearWeeklyAverageModel,
     WeeklyChangeFourierRegressionModel,
 )
@@ -60,3 +60,44 @@ def test_sklearn_model_configs_build_cloneable_estimators():
 def test_default_feature_and_target_config_are_nonempty():
     assert DEFAULT_TARGET_COLUMN == "weekly_change_bcf"
     assert DEFAULT_FEATURE_COLUMNS
+
+
+def test_dynamic_model_configs_presence():
+    configs = sklearn_model_configs()
+    keys = {config.key for config in configs}
+
+    # Verify presence based on actual importability
+    try:
+        import lightgbm  # noqa: F401
+        has_lgb = True
+    except ImportError:
+        has_lgb = False
+
+    try:
+        import xgboost  # noqa: F401
+        has_xgb = True
+    except ImportError:
+        has_xgb = False
+
+    assert ("lightgbm" in keys) == has_lgb
+    assert ("xgboost" in keys) == has_xgb
+
+    # If present, check their attributes
+    configs_dict = {config.key: config for config in configs}
+    if has_lgb:
+        lgb_config = configs_dict["lightgbm"]
+        assert lgb_config.label == "LightGBM Regressor"
+        estimator = lgb_config.build()
+        assert estimator.n_estimators == 300
+        assert estimator.learning_rate == 0.05
+        assert estimator.random_state == 42
+        assert estimator.n_jobs == -1
+
+    if has_xgb:
+        xgb_config = configs_dict["xgboost"]
+        assert xgb_config.label == "XGBoost Regressor"
+        estimator = xgb_config.build()
+        assert estimator.n_estimators == 300
+        assert estimator.learning_rate == 0.05
+        assert estimator.random_state == 42
+        assert estimator.n_jobs == -1

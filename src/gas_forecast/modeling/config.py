@@ -9,7 +9,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from gas_forecast.data.features import DEFAULT_WEATHER_MODEL_FEATURES, TARGET_COLUMN
-from gas_forecast.models import (
+from gas_forecast.modeling.models import (
     FiveYearWeeklyAverageModel,
     WeeklyChangeForecastModel,
     WeeklyChangeFourierRegressionModel,
@@ -155,9 +155,59 @@ def legacy_forecast_model_configs() -> tuple[ForecastModelConfig, ...]:
     return LEGACY_FORECAST_MODEL_CONFIGS
 
 
+def _build_lightgbm():
+    import lightgbm as lgb
+    return lgb.LGBMRegressor(
+        n_estimators=300,
+        learning_rate=0.05,
+        reg_lambda=0.1,
+        verbosity=-1,
+        random_state=42,
+        n_jobs=-1,
+    )
+
+
+def _build_xgboost():
+    import xgboost as xgb
+    return xgb.XGBRegressor(
+        n_estimators=300,
+        learning_rate=0.05,
+        reg_lambda=0.1,
+        verbosity=0,
+        random_state=42,
+        n_jobs=-1,
+    )
+
+
 def sklearn_model_configs() -> tuple[SklearnModelConfig, ...]:
     """Return default sklearn-style model configs for feature-table backtests."""
-    return SKLEARN_MODEL_CONFIGS
+    configs = list(SKLEARN_MODEL_CONFIGS)
+
+    try:
+        import lightgbm  # noqa: F401
+        configs.append(
+            SklearnModelConfig(
+                key="lightgbm",
+                label="LightGBM Regressor",
+                factory=_build_lightgbm,
+            )
+        )
+    except ImportError:
+        pass
+
+    try:
+        import xgboost  # noqa: F401
+        configs.append(
+            SklearnModelConfig(
+                key="xgboost",
+                label="XGBoost Regressor",
+                factory=_build_xgboost,
+            )
+        )
+    except ImportError:
+        pass
+
+    return tuple(configs)
 
 
 def build_fourier_model(n_harmonics: int) -> WeeklyChangeFourierRegressionModel:

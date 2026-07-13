@@ -229,13 +229,16 @@ def add_storage_features(
             df, TARGET_COLUMN, window
         )
 
+    df["storage_bcf_lag1"] = _lag_within_region(df, "storage_bcf", 1)
     df["storage_bcf_lag52"] = _lag_within_region(df, "storage_bcf", yoy_lag)
-    df["storage_vs_last_year"] = df["storage_bcf"] - df["storage_bcf_lag52"]
+    df["storage_vs_last_year"] = df["storage_bcf_lag1"] - _lag_within_region(df, "storage_bcf", 53)
     df["storage_5yr_avg"] = _same_week_history_mean(df, "storage_bcf", years=5)
-    df["storage_vs_5yr_avg"] = df["storage_bcf"] - df["storage_5yr_avg"]
-    df["weekly_change_yoy"] = df[TARGET_COLUMN] - _lag_within_region(
-        df, TARGET_COLUMN, yoy_lag
-    )
+    df["storage_vs_5yr_avg"] = df["storage_bcf_lag1"] - _lag_within_region(df, "storage_5yr_avg", 1)
+    # The target-week change is unknown at forecast time. Compare the last
+    # observed change with its year-ago counterpart instead of using the target.
+    prior_change = _lag_within_region(df, TARGET_COLUMN, 1)
+    prior_year_change = _lag_within_region(df, TARGET_COLUMN, yoy_lag + 1)
+    df["weekly_change_yoy"] = prior_change - prior_year_change
 
     return df
 
@@ -253,6 +256,8 @@ def build_weekly_model_features(
         weather = weather.loc[weather["duoarea"] == region].copy()
 
     joined = join_weather_storage(storage, weather)
+    # Grouped shifts and rolling windows rely on chronological input order.
+    joined = joined.sort_values(["duoarea", "date"]).reset_index(drop=True)
     df = add_calendar_features(joined)
     df = add_weather_features(df, lag_weeks=lag_weeks)
     df = add_storage_features(df, lag_weeks=lag_weeks)

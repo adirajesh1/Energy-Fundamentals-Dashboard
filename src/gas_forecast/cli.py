@@ -51,7 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     refresh.add_argument(
         "--region",
-        help="EIA duoarea code (R48, R01, R02, R03, R04, R05).",
+        help="EIA duoarea code (R48, R31, R32, R33, R34, R35).",
     )
     refresh.add_argument(
         "--all-regions",
@@ -106,12 +106,126 @@ def build_parser() -> argparse.ArgumentParser:
         help="Do not migrate legacy weather chunk cache files.",
     )
 
+    balance = subparsers.add_parser(
+        "balance",
+        help="Run weekly supply-demand balance disaggregation pipeline.",
+    )
+    balance.add_argument(
+        "--region",
+        required=True,
+        help="EIA duoarea code (R48, R31, R32, R33, R34, R35).",
+    )
+    balance.add_argument(
+        "--processed-dir",
+        type=Path,
+        default=DEFAULT_PROCESSED_DIR,
+        help="Processed parquet output directory.",
+    )
+    balance.add_argument(
+        "--force-refresh",
+        action="store_true",
+        help="Force refresh raw monthly EIA data cache.",
+    )
+
+    weather_scenario = subparsers.add_parser(
+        "weather-scenario",
+        help="Select an archived weekly weather forecast as of one origin.",
+    )
+    weather_scenario.add_argument(
+        "--region",
+        required=True,
+        help="EIA duoarea code for the scenario table.",
+    )
+    weather_scenario.add_argument(
+        "--scenarios-path",
+        required=True,
+        type=Path,
+        help="Parquet archive with date, duoarea, issued_at, and weekly weather values.",
+    )
+    weather_scenario.add_argument(
+        "--as-of",
+        required=True,
+        help="Forecast-origin timestamp used to select the latest available version.",
+    )
+    weather_scenario.add_argument(
+        "--processed-dir",
+        type=Path,
+        default=DEFAULT_PROCESSED_DIR,
+        help="Processed parquet output directory.",
+    )
+
+    balance_asof = subparsers.add_parser(
+        "balance-asof",
+        help="Build balance lag features from an explicit historical vintage archive.",
+    )
+    balance_asof.add_argument(
+        "--region",
+        required=True,
+        help="EIA duoarea code (R48, R31, R32, R33, R34, R35).",
+    )
+    balance_asof.add_argument(
+        "--vintages-path",
+        required=True,
+        type=Path,
+        help="Parquet archive with date, duoarea, available_at, and balance values.",
+    )
+    balance_asof.add_argument(
+        "--origins-path",
+        type=Path,
+        help="Optional feature/origin parquet; defaults to the region's model features.",
+    )
+    balance_asof.add_argument(
+        "--as-of-column",
+        default="date",
+        help="Origin timestamp column; date is interpreted as midnight UTC.",
+    )
+    balance_asof.add_argument(
+        "--processed-dir",
+        type=Path,
+        default=DEFAULT_PROCESSED_DIR,
+        help="Processed parquet output directory.",
+    )
+
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.command == "weather-scenario":
+        from gas_forecast.pipelines.asof import run_weather_scenario_pipeline
+
+        path = run_weather_scenario_pipeline(
+            region=args.region,
+            scenarios_path=args.scenarios_path,
+            as_of=args.as_of,
+            processed_dir=args.processed_dir,
+        )
+        print(path)
+        return 0
+
+    if args.command == "balance-asof":
+        from gas_forecast.pipelines.asof import run_asof_balance_pipeline
+
+        path = run_asof_balance_pipeline(
+            region=args.region,
+            vintages_path=args.vintages_path,
+            origins_path=args.origins_path,
+            as_of_col=args.as_of_column,
+            processed_dir=args.processed_dir,
+        )
+        print(path)
+        return 0
+
+    if args.command == "balance":
+        from gas_forecast.pipelines.balance import run_balance_pipeline
+        run_balance_pipeline(
+            region=args.region,
+            processed_dir=args.processed_dir,
+            force_refresh=args.force_refresh,
+        )
+        return 0
 
     if args.command != "refresh":
         parser.error(f"Unsupported command: {args.command}")

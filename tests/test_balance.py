@@ -1,0 +1,110 @@
+from __future__ import annotations
+
+import pandas as pd
+import numpy as np
+import pytest
+
+from gas_forecast.data.balance_api import STATE_TO_ABBR
+from gas_forecast.pipelines.balance import aggregate_price_to_weeks
+from gas_forecast.modeling.models import StructuralDisaggregator
+
+def test_state_abbreviations():
+    assert STATE_TO_ABBR["Texas"] == "TX"
+    assert STATE_TO_ABBR["California"] == "CA"
+    assert STATE_TO_ABBR["Florida"] == "FL"
+
+def test_aggregate_price_to_weeks():
+    # Create daily prices
+    dates = pd.date_range(start="2026-01-01", end="2026-01-15")
+    prices = pd.DataFrame({
+        "period": dates,
+        "value": np.linspace(2.0, 3.0, len(dates))
+    })
+    
+    # Weekly Friday dates
+    weekly_dates = pd.Series([
+        pd.Timestamp("2026-01-09"),
+        pd.Timestamp("2026-01-16")
+    ])
+    
+    res = aggregate_price_to_weeks(prices, weekly_dates)
+    assert len(res) == 2
+    assert res.iloc[0]["period"] == pd.Timestamp("2026-01-09")
+    # For 2026-01-09, the 7-day range is 2026-01-03 to 2026-01-09
+    expected_mean = prices[(prices["period"] >= "2026-01-03") & (prices["period"] <= "2026-01-09")]["value"].mean()
+    assert pytest.approx(res.iloc[0]["value"]) == expected_mean
+
+def test_structural_disaggregator_fit_predict():
+    # 1. Create mock monthly EIA data for 2 states (CA, TX)
+    periods = pd.date_range(start="2024-01-01", end="2024-12-01", freq="MS")
+    records = []
+    for p in periods:
+        # National baseline series
+        records.extend([
+            {"period": p.strftime("%Y-%m"), "series": "N9070US2", "value": 200000.0, "duoarea": "NUS"},
+            {"period": p.strftime("%Y-%m"), "series": "N9050US2", "value": 200000.0, "duoarea": "NUS"},
+            {"period": p.strftime("%Y-%m"), "series": "N9140US2", "value": 200000.0, "duoarea": "NUS"},
+            {"period": p.strftime("%Y-%m"), "series": "N9160US2", "value": 4000.0, "duoarea": "NUS"},
+            {"period": p.strftime("%Y-%m"), "series": "N9170US2", "value": 2000.0, "duoarea": "NUS"},
+        ])
+        for state in ["CA", "TX"]:
+            records.extend([
+                {"period": p.strftime("%Y-%m"), "series": f"N9050{state}2", "value": 100000.0, "duoarea": f"S{state}"}, # Marketed Production (100 Bcf)
+                {"period": p.strftime("%Y-%m"), "series": f"N3010{state}2", "value": 20000.0, "duoarea": f"S{state}"},      # Res (20 Bcf)
+                {"period": p.strftime("%Y-%m"), "series": f"N3020{state}2", "value": 10000.0, "duoarea": f"S{state}"},      # Com (10 Bcf)
+                {"period": p.strftime("%Y-%m"), "series": f"N3035{state}2", "value": 30000.0, "duoarea": f"S{state}"},      # Ind (30 Bcf)
+                {"period": p.strftime("%Y-%m"), "series": f"N3045{state}2", "value": 40000.0, "duoarea": f"S{state}"},      # Power (40 Bcf)
+            ])
+    monthly_df = pd.DataFrame(records)
+    monthly_df["period"] = pd.to_datetime(monthly_df["period"] + "-01")
+    monthly_df["value"] = pd.to_numeric(monthly_df["value"])
+
+    # 2. Create mock daily weather
+    daily_dates = pd.date_range(start="2024-01-01", end="2024-12-31")
+    daily_weather = pd.DataFrame({
+        "date": daily_dates,
+        "hdd": np.random.uniform(5, 25, len(daily_dates)),
+        "cdd": np.random.uniform(0, 10, len(daily_dates)),
+        "temperature_f": np.random.uniform(30, 80, len(daily_dates))
+    })
+
+    # 3. Create mock daily prices
+    daily_price = pd.DataFrame({
+        "period": daily_dates,
+        "value": np.random.uniform(2.0, 4.0, len(daily_dates))
+    })
+
+    # 4. Instantiate and fit disaggregator
+    disagg = StructuralDisaggregator()
+    states = ["California", "Texas"]
+    disagg.fit(monthly_df, daily_weather, daily_price, states)
+
+    # 5. Predict on weekly weather
+    weekly_dates = pd.date_range(start="2024-01-05", end="2024-12-27", freq="W-FRI")
+    weekly_weather = pd.DataFrame({
+        "date": weekly_dates,
+        "hdd": np.random.uniform(50, 150, len(weekly_dates)),
+        "cdd": np.random.uniform(0, 50, len(weekly_dates)),
+        "temperature_f": np.random.uniform(35, 75, len(weekly_dates)),
+        "month": weekly_dates.month,
+        "week_of_year": weekly_dates.isocalendar().week,
+        "duoarea": "R48"
+    })
+    
+    weekly_price = pd.DataFrame({
+        "period": weekly_dates,
+        "value": np.random.uniform(2.0, 4.0, len(weekly_dates))
+    })
+
+    weekly_balance = disagg.predict_weekly(weekly_weather, weekly_price)
+
+    assert not weekly_balance.empty
+    assert "res_com" in weekly_balance.columns
+    assert "power_burn" in weekly_balance.columns
+    assert "industrial" in weekly_balance.columns
+    assert "dry_production" in weekly_balance.columns
+    assert "local_balance" in weekly_balance.columns
+
+    # Verify dry production is roughly around expected scale
+    # Total monthly was 200 Bcf (2 states * 100 Bcf each). Daily ~6.6 Bcf. Weekly ~46 Bcf.
+    assert weekly_balance["dry_production"].mean() == pytest.approx(46.66, rel=0.1)

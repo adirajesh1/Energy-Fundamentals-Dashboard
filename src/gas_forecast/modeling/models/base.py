@@ -13,7 +13,7 @@ class WeeklyChangeForecastModel(ABC):
 
     @abstractmethod
     def fit(self, storage: pd.DataFrame) -> "WeeklyChangeForecastModel":
-        """Train the model on historical storage data."""
+        """Train the model on exactly the historical rows supplied by the caller."""
 
     @abstractmethod
     def predict(self, evaluation: pd.DataFrame) -> pd.DataFrame:

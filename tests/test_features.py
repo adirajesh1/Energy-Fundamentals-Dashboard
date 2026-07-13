@@ -70,8 +70,49 @@ def test_build_weekly_model_features_adds_rolling_surplus_and_season_features():
 
     assert r01.loc[4, "weekly_change_rolling_4wk"] == 1.5
     assert r01.loc[4, "hdd_rolling_4wk"] == 25.0
-    assert r01.loc[52, "storage_vs_last_year"] == 52
-    assert r01.loc[52, "storage_vs_5yr_avg"] == 52
+    assert r01.loc[53, "storage_vs_last_year"] == 52
+    assert r01.loc[53, "storage_vs_5yr_avg"] == 52
     assert r01.loc[0, "is_withdrawal_season"] == 1
     assert r01.loc[14, "is_injection_season"] == 1
     assert set(DEFAULT_WEATHER_MODEL_FEATURES).issubset(features.columns)
+
+
+def test_feature_builder_sorts_inputs_and_keeps_target_week_out_of_yoy_feature():
+    dates = pd.date_range("2023-01-06", periods=60, freq="W-FRI")
+    storage = pd.DataFrame(
+        {
+            "date": dates,
+            "duoarea": "R01",
+            "storage_bcf": range(100, 160),
+            "weekly_change_bcf": [float(value) for value in range(60)],
+            "year": dates.year,
+            "month": dates.month,
+            "week_of_year": dates.isocalendar().week.astype(int),
+        }
+    )
+    weather = pd.DataFrame(
+        {
+            "date": dates,
+            "duoarea": "R01",
+            "temperature_f": 50.0,
+            "hdd": 20.0,
+            "cdd": 0.0,
+            "weather_days": 7,
+        }
+    )
+
+    shuffled = build_weekly_model_features(
+        storage.sample(frac=1.0, random_state=7),
+        weather.sample(frac=1.0, random_state=11),
+    )
+    baseline = build_weekly_model_features(storage, weather)
+
+    assert shuffled.loc[1, "weekly_change_lag1"] == 0.0
+    assert shuffled.loc[4, "weekly_change_rolling_4wk"] == 1.5
+    assert baseline.loc[55, "weekly_change_yoy"] == 52.0
+
+    changed_storage = storage.copy()
+    changed_storage.loc[55, "weekly_change_bcf"] = 9_999.0
+    changed = build_weekly_model_features(changed_storage, weather)
+
+    assert changed.loc[55, "weekly_change_yoy"] == baseline.loc[55, "weekly_change_yoy"]

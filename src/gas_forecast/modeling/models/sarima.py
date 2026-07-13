@@ -1,8 +1,8 @@
 import pandas as pd
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 
-from gas_forecast.models._training import holdout_training_frame
-from gas_forecast.models.base import WeeklyChangeForecastModel
+from gas_forecast.modeling.models.base import WeeklyChangeForecastModel
+from gas_forecast.modeling.models.training import select_training_history
 
 
 class WeeklyChangeSARIMAModel(WeeklyChangeForecastModel):
@@ -26,7 +26,10 @@ class WeeklyChangeSARIMAModel(WeeklyChangeForecastModel):
         return f"SARIMA({p},{d},{q})({P},{D},{Q},{s})"
 
     def fit(self, storage: pd.DataFrame) -> "WeeklyChangeSARIMAModel":
-        train, _ = holdout_training_frame(storage, lookback_years=self.lookback_years)
+        train = select_training_history(
+            storage,
+            lookback_years=self.lookback_years,
+        )
         series = train["weekly_change_bcf"].dropna()
 
         self._fitted = SARIMAX(
