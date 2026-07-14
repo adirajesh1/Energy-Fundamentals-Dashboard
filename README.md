@@ -2,6 +2,12 @@
 
 Weekly natural gas storage forecasting with reproducible data pipelines, weather-aware feature engineering, and time-aware model backtests.
 
+The repository also contains an ERCOT system-wide hourly power-fundamentals MVP.
+It archives public forecast vintages, applies leakage-safe load/wind/solar error
+corrections, builds a balanced 168-hour supply stack, and derives an explicit
+heat-rate-based gas-burn scenario. See
+[`docs/power_fundamentals.md`](docs/power_fundamentals.md).
+
 ## Project Goal
 
 This project forecasts weekly changes in U.S. natural gas storage, measured in billion cubic feet:

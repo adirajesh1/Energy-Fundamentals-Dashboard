@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 
+from gas_forecast.data.balance_api import NATIONAL_BASELINE_SERIES, STATE_TO_ABBR
+
 
 class StructuralDisaggregator:
     """
@@ -26,7 +28,14 @@ class StructuralDisaggregator:
         Fit weather and price regressions on monthly data.
         """
         # 1. Extract national series and pivot
-        national_series = ["N9070US2", "N9050US2", "N9140US2", "N9160US2", "N9170US2"]
+        national_series = list(NATIONAL_BASELINE_SERIES)
+        available_series = set(monthly_df["series"].dropna().astype(str))
+        missing_national = sorted(set(national_series) - available_series)
+        if missing_national:
+            raise ValueError(
+                "Monthly EIA data is missing required national baseline series: "
+                f"{missing_national}. Refresh the balance cache and try again."
+            )
         national_df = monthly_df[monthly_df["series"].isin(national_series)].copy()
         national_df["value_bcf"] = national_df["value"] / 1000.0
         national_monthly = national_df.pivot(index="period", columns="series", values="value_bcf").reset_index()
@@ -59,7 +68,6 @@ class StructuralDisaggregator:
         state_df["abbr"] = state_df["series"].str.slice(5, 7)
         
         # Filter explicitly to the region's states to avoid double-counting national/other totals
-        from gas_forecast.data.balance_api import STATE_TO_ABBR
         state_abbrs = {STATE_TO_ABBR.get(s) for s in states if STATE_TO_ABBR.get(s)}
         state_df = state_df[state_df["abbr"].isin(state_abbrs)]
 
@@ -173,7 +181,18 @@ class StructuralDisaggregator:
         merged = merged.merge(monthly_price, on="period", how="inner")
         
         if merged.empty:
-            raise ValueError("No overlapping monthly data found between EIA metrics, weather, and price.")
+            def period_range(frame: pd.DataFrame) -> str:
+                if frame.empty:
+                    return "empty"
+                return f"{frame['period'].min():%Y-%m} to {frame['period'].max():%Y-%m}"
+
+            raise ValueError(
+                "No overlapping monthly data found between EIA metrics, weather, "
+                "and price. Ranges: "
+                f"EIA={period_range(regional_monthly)}, "
+                f"weather={period_range(monthly_weather)}, "
+                f"price={period_range(monthly_price)}."
+            )
 
         # Calculate seasonal basis spread (Regional Price - Henry Hub Price)
         merged["basis_spread"] = merged["regional_price"] - merged["price_hh"]

@@ -42,7 +42,7 @@ def load_methodology_document() -> str:
 
 
 st.set_page_config(
-    page_title="Gas Market Balance & Explainability",
+    page_title="Gas Fundamentals",
     page_icon="🔥",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -67,7 +67,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🔥 Gas Market Platform")
+st.title("🔥 Gas Fundamentals")
 st.subheader("Unified Weekly Supply-Demand Balance Model & LLM Price Explainability")
 
 # Sidebar
@@ -154,17 +154,42 @@ else:
             label="Calculated Local Balance",
             value=f"{latest_row['local_balance']:.1f} Bcf",
             delta=f"{(latest_row['local_balance'] - prev_row['local_balance']):+.1f} Bcf")
-         # Charts Tabs
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "Balance Sheet", 
-        "Storage Correlation", 
-        "Spot Prices", 
-        "Forecasting & Backtesting",
-        "Deeper Market Analysis", 
-        "Methodology & Assumptions"
+
+    with st.expander("How the gas fundamentals model works", expanded=False):
+        st.markdown(
+            """
+            1. **Build weekly regional supply and demand:** monthly EIA state data are
+               disaggregated to storage weeks using daily weather, calendar effects, and spot prices.
+            2. **Calculate the local balance:**
+               `dry production - residential/commercial - power burn - industrial - fuel use`.
+            3. **Reconcile with storage:** actual EIA storage change is compared with the local balance;
+               the difference is the implied net inflow and balancing residual.
+            4. **Forecast weekly storage change:** the selected model uses calendar cycles, HDD/CDD,
+               lagged weather, lagged storage changes, and inventory relative to historical norms.
+            5. **Roll storage forward:** each predicted weekly change is added to the previous projected
+               storage level. Multiweek forecasts are recursive, so earlier predictions feed later weeks.
+            6. **Backtest without leakage:** every fold trains only on weeks available before its validation window.
+
+            Volumes are weekly Bcf unless otherwise labeled. The balance sheet explains physical context;
+            the storage forecast is trained on leakage-safe model features rather than contemporaneous
+            balance values that would not yet be known.
+            """
+        )
+
+    forecast_tab, balance_tab, inventory_tab, flows_tab, prices_tab, diagnostics_tab = st.tabs([
+        "1 · Forecast",
+        "2 · Physical balance",
+        "3 · Inventory / adequacy",
+        "4 · Fuel & flows",
+        "5 · Market prices",
+        "6 · Diagnostics & methodology",
     ])
 
-    with tab1:
+    with balance_tab:
+        st.caption(
+            "Weekly physical context. Dry production is supply; residential/commercial, power, "
+            "industrial, and lease/plant/pipeline fuel are demand components estimated from EIA data."
+        )
         st.markdown("### Weekly Supply and Demand Components (Bcf)")
         
         fig = go.Figure()
@@ -205,7 +230,11 @@ else:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    with tab2:
+    with inventory_tab:
+        st.caption(
+            "Inventory reconciliation. Local balance equals production minus modeled consumption; "
+            "the residual equals actual EIA storage change minus that local balance."
+        )
         st.markdown("### Local Balance vs Actual Weekly Storage Change")
         st.write("A negative local balance (consumption exceeds production) correlates with storage withdrawals (negative changes).")
         
@@ -235,7 +264,11 @@ else:
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    with tab3:
+    with prices_tab:
+        st.caption(
+            "Market-price context only. Daily Henry Hub observations are averaged into storage weeks; "
+            "regional views add the available regional price series. This chart is not itself a price forecast."
+        )
         is_national = (selected_region == "R48")
         title_text = "Henry Hub Spot Prices ($/MMBtu)" if is_national else f"Spot Price Comparison: Henry Hub vs. {region_options[selected_region]} ($/MMBtu)"
         st.markdown(f"### {title_text}")
@@ -264,7 +297,11 @@ else:
         )
         st.plotly_chart(fig_price, use_container_width=True)
 
-    with tab4:
+    with forecast_tab:
+        st.caption(
+            "Primary gas model. It predicts weekly EIA storage change, recursively adds each change to "
+            "inventory, and evaluates historical accuracy with expanding-window backtests."
+        )
         st.markdown("### Multi-Horizon Storage Forecasting")
         if features_df is None:
             st.warning("No weekly model features file found for this region. Please run the features stage of the data pipeline first.")
@@ -541,7 +578,11 @@ else:
                             st.error(f"Backtest failed: {e}")
 
 
-    with tab5:
+    with flows_tab:
+        st.caption(
+            "Derived market context. Tightness compares the local balance with its contemporaneous seasonal norm; "
+            "border/pipeline flow is the residual needed to reconcile local balance with actual storage change."
+        )
         st.markdown("### Deeper Market Dynamics & Flows")
         
         # Calculate Market Tightness
@@ -610,7 +651,11 @@ else:
         )
         st.plotly_chart(fig_bf, use_container_width=True)
 
-    with tab6:
+    with diagnostics_tab:
+        st.caption(
+            "Model documentation and assumptions. Forecast accuracy controls live under the Forecast tab "
+            "because they evaluate the storage model shown there."
+        )
         st.markdown("## 📖 Rigorous Mathematical Methodology & Framework")
         st.markdown(load_methodology_document())
     st.markdown("---")

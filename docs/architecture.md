@@ -18,6 +18,7 @@ External sources
   EIA weekly storage API
   Open-Meteo archive API
   Census state population centroids
+  ERCOT Public Data API and EIA-930
         |
         v
 Raw incremental cache
@@ -37,6 +38,11 @@ Forecast models, evaluation, and plots
 ```
 
 The code is packaged under `src/gas_forecast` so notebooks and command-line workflows can share the same implementation.
+
+Domain-neutral artifact, as-of, interval, and hourly backtest infrastructure is
+packaged under `src/energy_forecast`. ERCOT-specific ingestion and the hourly
+physical-stack model are isolated under `src/power_forecast`; gas imports retain
+their compatibility surfaces.
 
 ## Repository layout
 
@@ -83,6 +89,10 @@ ownership when they gain runtime responsibilities or remove them.
 | `gas_forecast.modeling.intervals` | Conformal interval calibration and empirical coverage diagnostics. |
 | `gas_forecast.modeling.models` | Legacy seasonal models, a shared fit-history selector, and balance disaggregation components. |
 | `gas_forecast.plotting` | Standard Plotly forecast visualizations. |
+| `energy_forecast` | Shared append-only vintages, as-of selection, exact-timestamp rolling origins, metrics, and conformal intervals. |
+| `power_forecast.data` | ERCOT Public API, EIA-930, and archived weather adapters with canonical UTC schemas. |
+| `power_forecast.pipelines` | Materializes public-data vintages and builds the 168-hour ERCOT physical stack. |
+| `power_forecast.models` | Leakage-safe load, wind, and solar residual correction and promotion gating. |
 
 ## Entry points
 
@@ -101,6 +111,9 @@ gas-data refresh --region R48
 gas-data refresh --all-regions
 gas-data weather-scenario --region R48 --scenarios-path weather_vintages.parquet --as-of 2025-01-03T00:00:00Z
 gas-data balance-asof --region R48 --vintages-path balance_vintages.parquet
+power-data refresh
+power-data forecast --horizon-hours 168
+power-data backtest
 ```
 
 Optional flags control stage selection, cache directories, processed output directories, storage revision windows, Open-Meteo request pacing, and legacy weather-cache migration.

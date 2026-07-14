@@ -28,6 +28,32 @@ STATE_TO_ABBR = {
 EIA_LSUM_URL = "https://api.eia.gov/v2/natural-gas/sum/lsum/data/"
 EIA_PRI_URL = "https://api.eia.gov/v2/natural-gas/pri/fut/data/"
 
+NATIONAL_BASELINE_SERIES = (
+    "N9070US2",  # U.S. Dry Natural Gas Production (MMcf)
+    "N9050US2",  # U.S. Marketed Natural Gas Production (MMcf)
+    "N9140US2",  # U.S. Natural Gas Total Consumption (MMcf)
+    "N9160US2",  # U.S. Lease and Plant Fuel Consumption (MMcf)
+    "N9170US2",  # U.S. Pipeline and Distribution Use (MMcf)
+)
+
+
+def _monthly_cache_is_usable(df: pd.DataFrame) -> bool:
+    """Return whether cached monthly data has the inputs required by the model."""
+    if df.empty or not {"period", "series", "value"}.issubset(df.columns):
+        return False
+
+    available = set(df["series"].dropna().astype(str))
+    has_national_baselines = set(NATIONAL_BASELINE_SERIES).issubset(available)
+    has_state_consumption = any(
+        series.startswith(("N3010", "N3020", "N3035", "N3045"))
+        for series in available
+    )
+    has_state_production = any(
+        series.startswith("N9050") and series != "N9050US2"
+        for series in available
+    )
+    return has_national_baselines and has_state_consumption and has_state_production
+
 def fetch_eia_api_paginated(
     url: str,
     params: dict[str, str | list[str] | int],
@@ -99,16 +125,6 @@ def fetch_monthly_state_data_raw(
                 f"N3050{abbr}2",     # Natural Gas Citygate Price ($/Mcf)
             ])
 
-        # Always fetch national baseline series in the first chunk to enable downscaling
-        if i == 0:
-            series_codes.extend([
-                "N9070US2",  # U.S. Dry Natural Gas Production (MMcf)
-                "N9050US2",  # U.S. Marketed Natural Gas Production (MMcf)
-                "N9140US2",  # U.S. Natural Gas Total Consumption (MMcf)
-                "N9160US2",  # U.S. Natural Gas Lease and Plant Fuel Consumption (MMcf)
-                "N9170US2",  # U.S. Natural Gas Pipeline & Distribution Use (MMcf)
-            ])
-
         if not series_codes:
             continue
 
@@ -126,6 +142,22 @@ def fetch_monthly_state_data_raw(
         df_chunk = fetch_eia_api_paginated(EIA_LSUM_URL, params)
         if not df_chunk.empty:
             all_frames.append(df_chunk)
+
+    # Keep national series in a separate request. EIA has changed state-series
+    # aliases over time, and mixing a large state facet with national series can
+    # produce a valid response that silently omits the national rows.
+    national_params: dict[str, str | list[str] | int] = {
+        "api_key": key,
+        "frequency": "monthly",
+        "data[0]": "value",
+        "facets[series][]": list(NATIONAL_BASELINE_SERIES),
+        "start": start_date[:7],
+    }
+    if end_date:
+        national_params["end"] = end_date[:7]
+    national_df = fetch_eia_api_paginated(EIA_LSUM_URL, national_params)
+    if not national_df.empty:
+        all_frames.append(national_df)
 
     if not all_frames:
         return pd.DataFrame()
@@ -169,13 +201,23 @@ def get_monthly_state_data(
     cache_path = cache_dir / "balance" / f"state_monthly_{states_hash}.parquet"
     
     if not force_refresh and cache_path.exists():
-        return load_parquet_cache(cache_path)
+        cached = load_parquet_cache(cache_path)
+        if _monthly_cache_is_usable(cached):
+            return cached
+        print(f"Cached monthly balance data is incomplete; refreshing {cache_path.name}...")
 
     df = fetch_monthly_state_data_raw(api_key, sorted_states)
     if not df.empty:
         # Convert period column to datetime
         df["period"] = pd.to_datetime(df["period"] + "-01")
         df["value"] = pd.to_numeric(df["value"], errors="coerce")
+        if not _monthly_cache_is_usable(df):
+            available = set(df["series"].dropna().astype(str))
+            missing_national = sorted(set(NATIONAL_BASELINE_SERIES) - available)
+            raise ValueError(
+                "EIA monthly response is missing required balance series. "
+                f"Missing national baselines: {missing_national}"
+            )
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         write_parquet_cache(df, cache_path)
     return df

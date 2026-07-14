@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
 import pandas as pd
 import numpy as np
 import pytest
 
-from gas_forecast.data.balance_api import STATE_TO_ABBR
+from gas_forecast.data import balance_api
+from gas_forecast.data.balance_api import NATIONAL_BASELINE_SERIES, STATE_TO_ABBR
 from gas_forecast.pipelines.balance import aggregate_price_to_weeks
 from gas_forecast.modeling.models import StructuralDisaggregator
 
@@ -33,6 +37,71 @@ def test_aggregate_price_to_weeks():
     # For 2026-01-09, the 7-day range is 2026-01-03 to 2026-01-09
     expected_mean = prices[(prices["period"] >= "2026-01-03") & (prices["period"] <= "2026-01-09")]["value"].mean()
     assert pytest.approx(res.iloc[0]["value"]) == expected_mean
+
+
+def test_monthly_fetch_requests_national_baselines_separately(monkeypatch):
+    requested_series = []
+
+    def fake_fetch(url, params, timeout=30.0):
+        requested_series.append(tuple(params["facets[series][]"]))
+        return pd.DataFrame(
+            {
+                "period": ["2024-01"],
+                "series": [params["facets[series][]"][0]],
+                "value": [1.0],
+            }
+        )
+
+    monkeypatch.setattr(balance_api, "fetch_eia_api_paginated", fake_fetch)
+
+    balance_api.fetch_monthly_state_data_raw("test-key", ["Texas"])
+
+    assert len(requested_series) == 2
+    assert set(requested_series[-1]) == set(NATIONAL_BASELINE_SERIES)
+    assert not set(requested_series[0]) & set(NATIONAL_BASELINE_SERIES)
+
+
+def test_incomplete_monthly_cache_is_refetched(monkeypatch):
+    refreshed = False
+
+    def fake_fetch(api_key, states, start_date="2010-01-01", end_date=None):
+        nonlocal refreshed
+        refreshed = True
+        series = [
+            "N3010TX2",
+            "N9050TX2",
+            *NATIONAL_BASELINE_SERIES,
+        ]
+        return pd.DataFrame(
+            {
+                "period": ["2024-01"] * len(series),
+                "series": series,
+                "value": [1.0] * len(series),
+            }
+        )
+
+    monkeypatch.setattr(balance_api, "fetch_monthly_state_data_raw", fake_fetch)
+
+    with TemporaryDirectory(dir=Path.cwd()) as temp_dir:
+        cache_dir = Path(temp_dir)
+        cache_path = cache_dir / "balance" / "state_monthly_TX.parquet"
+        cache_path.parent.mkdir(parents=True)
+        pd.DataFrame(
+            {
+                "period": [pd.Timestamp("2024-01-01")],
+                "series": ["N3010TX2"],
+                "value": [1.0],
+            }
+        ).to_parquet(cache_path, index=False)
+
+        result = balance_api.get_monthly_state_data(
+            "test-key",
+            ["Texas"],
+            cache_dir=cache_dir,
+        )
+
+    assert refreshed
+    assert set(NATIONAL_BASELINE_SERIES).issubset(set(result["series"]))
 
 def test_structural_disaggregator_fit_predict():
     # 1. Create mock monthly EIA data for 2 states (CA, TX)

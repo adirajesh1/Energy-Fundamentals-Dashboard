@@ -20,6 +20,7 @@ dependencies = [
 
 [project.scripts]
 gas-data = "gas_forecast.cli:main"
+power-data = "power_forecast.cli:main"
 
 [project.optional-dependencies]
 dev = [
