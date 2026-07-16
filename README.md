@@ -8,6 +8,12 @@ corrections, builds a balanced 168-hour supply stack, and derives an explicit
 heat-rate-based gas-burn scenario. See
 [`docs/power_fundamentals.md`](docs/power_fundamentals.md).
 
+It also contains a weekly U.S. crude-oil fundamentals MVP. The model forecasts
+production, imports, exports, refinery inputs, SPR movement, and the observed
+balance adjustment, then combines them through the commercial crude balance
+identity to forecast the next weekly inventory change. See
+[`docs/oil_fundamentals.md`](docs/oil_fundamentals.md).
+
 ## Project Goal
 
 This project forecasts weekly changes in U.S. natural gas storage, measured in billion cubic feet:
@@ -164,6 +170,14 @@ Run only selected pipeline stages:
 
 ```bash
 gas-data refresh --region R48 --only storage,weather,features
+```
+
+Refresh, forecast, and backtest weekly crude fundamentals:
+
+```bash
+oil-data refresh --start 2010-01-01
+oil-data forecast
+oil-data backtest --initial-train-weeks 156
 ```
 
 Select a materialized weather scenario from a parquet archive:

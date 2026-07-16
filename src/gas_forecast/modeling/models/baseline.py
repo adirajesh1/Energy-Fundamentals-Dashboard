@@ -20,11 +20,14 @@ class FiveYearWeeklyAverageModel(WeeklyChangeForecastModel):
             storage,
             lookback_years=self.lookback_years,
         )
-        self._weekly_profile = (
+        profile = (
             training.groupby("week_of_year")["weekly_change_bcf"]
             .agg(predicted_weekly_change="mean", weekly_change_std="std")
             .reset_index()
         )
+        mean_std = float(profile["weekly_change_std"].dropna().mean()) if not profile["weekly_change_std"].dropna().empty else 0.0
+        profile["weekly_change_std"] = profile["weekly_change_std"].fillna(mean_std)
+        self._weekly_profile = profile
         return self
 
     def predict(self, evaluation: pd.DataFrame) -> pd.DataFrame:

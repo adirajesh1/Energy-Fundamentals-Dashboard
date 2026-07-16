@@ -7,7 +7,6 @@ from energy_forecast.artifacts import (
     load_parquet_cache,
     merge_timeseries,
     save_versioned_parquet,
-    split_gap_into_periods,
     write_parquet_cache,
 )
 from energy_forecast.asof import select_as_of
@@ -34,6 +33,5 @@ __all__ = [
     "run_backtest",
     "save_versioned_parquet",
     "select_as_of",
-    "split_gap_into_periods",
     "write_parquet_cache",
 ]

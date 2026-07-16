@@ -61,10 +61,7 @@ def select_region(storage: pd.DataFrame, region: str | list[str]) -> pd.DataFram
 
 def calculate_weekly_storage_change(storage: pd.DataFrame) -> pd.DataFrame:
     df = storage.copy()
-    if "duoarea" in df.columns:
-        df["weekly_change_bcf"] = df.groupby("duoarea")["value"].diff()
-    else:
-        df["weekly_change_bcf"] = df["value"].diff()
+    df["weekly_change_bcf"] = df.groupby("duoarea")["value"].diff()
     return df
 
 

@@ -16,4 +16,4 @@ def rmse(y_true, y_pred) -> float:
 
 
 def bias(y_true, y_pred) -> float:
-    return float(np.mean(_values(y_pred) - _values(y_true)))
+    return float(np.mean(_values(y_true) - _values(y_pred)))

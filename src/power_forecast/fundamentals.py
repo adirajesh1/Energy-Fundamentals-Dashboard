@@ -96,7 +96,8 @@ def _gas_generation_forecast(
     target = history["gas_generation_actual_mw"]
     if "dispatchable_thermal_actual_mw" not in history or len(history) < 24 * 30:
         return stack["dispatchable_thermal_mw"].to_numpy() * share, "recent_share_fallback"
-    history["hour"] = pd.to_datetime(history["valid_at"], utc=True).dt.hour
+    local_history = pd.to_datetime(history["valid_at"], utc=True).dt.tz_convert("America/Chicago")
+    history["hour"] = local_history.dt.hour
     history["hour_sin"] = np.sin(2 * np.pi * history["hour"] / 24.0)
     history["hour_cos"] = np.cos(2 * np.pi * history["hour"] / 24.0)
     history["gas_price"] = history.get("gas_price", gas_price)

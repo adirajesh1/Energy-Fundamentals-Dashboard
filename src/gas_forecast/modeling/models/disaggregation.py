@@ -81,11 +81,11 @@ class StructuralDisaggregator:
             if col not in pivoted.columns:
                 pivoted[col] = np.nan
         
-        # Merge in price_hh from daily_price aggregated to monthly averages for fallback
+        # Aggregate daily prices to monthly averages once for reuse and fallback
         price_m = daily_price.copy()
         price_m["period"] = price_m["period"].dt.to_period("M").dt.to_timestamp()
-        monthly_price_fallback = price_m.groupby("period")["value"].mean().rename("price_hh").reset_index()
-        pivoted = pivoted.merge(monthly_price_fallback, on="period", how="left")
+        monthly_price = price_m.groupby("period")["value"].mean().rename("price_hh").reset_index()
+        pivoted = pivoted.merge(monthly_price, on="period", how="left")
 
         for col in ["res", "com", "ind", "power_burn", "price", "marketed_production"]:
             pivoted[col] = pivoted.groupby("abbr")[col].transform(lambda s: s.ffill())
@@ -164,17 +164,14 @@ class StructuralDisaggregator:
         merged_monthly["fuel_use"] = merged_monthly["lease_plant_fuel"] + merged_monthly["pipeline_fuel"]
         
         # Final regional dataset (retaining regional_price for price basis spreading)
-        regional_monthly = merged_monthly[["period", "dry_production", "res_com", "power_burn", "ind", "fuel_use", "regional_price"]].rename(columns={"ind": "ind"})
+        regional_monthly = merged_monthly[["period", "dry_production", "res_com", "power_burn", "ind", "fuel_use", "regional_price"]]
         
         # 2. Aggregate daily weather to monthly totals
         weather_m = daily_weather.copy()
         weather_m["period"] = weather_m["date"].dt.to_period("M").dt.to_timestamp()
         monthly_weather = weather_m.groupby("period")[["hdd", "cdd"]].sum().reset_index()
 
-        # 3. Aggregate daily prices to monthly averages
-        price_m = daily_price.copy()
-        price_m["period"] = price_m["period"].dt.to_period("M").dt.to_timestamp()
-        monthly_price = price_m.groupby("period")["value"].mean().rename("price_hh").reset_index()
+        # 3. Re-use aggregated monthly prices calculated earlier
 
         # 4. Merge monthly balance, weather, and Henry Hub price data
         merged = regional_monthly.merge(monthly_weather, on="period", how="inner")

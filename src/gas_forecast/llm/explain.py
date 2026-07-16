@@ -4,17 +4,14 @@ import os
 import pandas as pd
 import google.generativeai as genai
 
+from gas_forecast.data.paths import load_env_files
+
 def _configure_gemini():
     """Retrieve API key and configure the google-generativeai SDK."""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        try:
-            from dotenv import load_dotenv
-            load_dotenv("local.env")
-            load_dotenv("notebooks/local.env")
-            api_key = os.getenv("GEMINI_API_KEY")
-        except ImportError:
-            pass
+        load_env_files()
+        api_key = os.getenv("GEMINI_API_KEY")
 
     if not api_key:
         raise ValueError(
@@ -27,7 +24,7 @@ def generate_weekly_market_report(
     balance_df: pd.DataFrame,
     target_date: pd.Timestamp | str,
     region_name: str = "Lower 48",
-    model_name: str = "gemini-3.5-flash",
+    model_name: str = "gemini-1.5-flash",
 ) -> str:
     """
     Generate an LLM explainability report for a specific week's supply/demand balance and price movement.
@@ -119,7 +116,7 @@ def answer_market_question(
     target_date: pd.Timestamp | str,
     question: str,
     region_name: str = "Lower 48",
-    model_name: str = "gemini-3.5-flash",
+    model_name: str = "gemini-1.5-flash",
 ) -> str:
     """
     Answer a custom user question about the market data, disaggregation analysis, or modeling methodology.

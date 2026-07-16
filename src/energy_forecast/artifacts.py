@@ -71,20 +71,24 @@ def append_vintage_parquet(
 def save_versioned_parquet(
     df: pd.DataFrame,
     output_dir: str | Path,
-    dataset_name: str,
+    dataset_name: str | None = None,
     *,
     save_latest: bool = True,
 ) -> Path:
     """Write a timestamped parquet artifact and an optional latest alias."""
-    if not dataset_name:
-        raise ValueError("dataset_name must be non-empty.")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    
+    if dataset_name is None or dataset_name == "":
+        dataset_base = f"df_{id(df)}"
+    else:
+        dataset_base = dataset_name
+
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    versioned = output_dir / f"{dataset_name}_{stamp}.parquet"
+    versioned = output_dir / f"{dataset_base}_{stamp}.parquet"
     write_parquet_cache(df, versioned)
     if save_latest:
-        write_parquet_cache(df, output_dir / f"{dataset_name}_latest.parquet")
+        write_parquet_cache(df, output_dir / f"{dataset_base}_latest.parquet")
     return versioned
 
 
@@ -136,23 +140,3 @@ def compute_date_gaps(
             gaps.append((gap_start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")))
     return gaps
 
-
-def split_gap_into_periods(
-    gap_start: str,
-    gap_end: str,
-    *,
-    max_days: int = 31,
-) -> list[tuple[str, str]]:
-    """Split an inclusive date range into bounded request periods."""
-    if max_days < 1:
-        raise ValueError("max_days must be at least 1.")
-    cursor = pd.Timestamp(gap_start)
-    end = pd.Timestamp(gap_end)
-    if cursor > end:
-        raise ValueError("gap_start must not be after gap_end.")
-    periods: list[tuple[str, str]] = []
-    while cursor <= end:
-        chunk_end = min(cursor + pd.Timedelta(days=max_days - 1), end)
-        periods.append((cursor.strftime("%Y-%m-%d"), chunk_end.strftime("%Y-%m-%d")))
-        cursor = chunk_end + pd.Timedelta(days=1)
-    return periods

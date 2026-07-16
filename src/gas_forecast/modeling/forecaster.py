@@ -242,8 +242,20 @@ def _recursive_feature_values(
         fallback=state.storage_bcf,
     )
 
-    # Compare the known storage state at t-1 to the same point one year ago.
-    last_year_date = target_date - pd.Timedelta(weeks=53)
+    previous_week = target_date - pd.Timedelta(weeks=1)
+    prev_iso = previous_week.isocalendar()
+    last_year_date = next(
+        (
+            d
+            for d in state.storage_by_date.keys()
+            if d.isocalendar().year == prev_iso.year - 1
+            and d.isocalendar().week == prev_iso.week
+        ),
+        None,
+    )
+    if last_year_date is None:
+        last_year_date = target_date - pd.Timedelta(weeks=53)
+
     last_year_storage = state.storage_by_date.get(last_year_date)
     if last_year_storage is None:
         last_year_storage = _same_week_storage_average(

@@ -6,7 +6,6 @@ from energy_forecast.artifacts import (
     compute_date_gaps,
     load_parquet_cache,
     merge_timeseries,
-    split_gap_into_periods,
     write_parquet_cache,
 )
 
@@ -18,6 +17,5 @@ __all__ = [
     "compute_date_gaps",
     "load_parquet_cache",
     "merge_timeseries",
-    "split_gap_into_periods",
     "write_parquet_cache",
 ]

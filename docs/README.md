@@ -1,140 +1,39 @@
-# Natural Gas Storage Forecast
+# Gas Market Platform - Documentation Directory
 
-A Python project for forecasting the weekly change in U.S. Lower 48 natural gas storage using EIA storage data and population-weighted weather features.
+Welcome to the documentation folder for the Gas Market Platform. This directory contains detailed architectural guides, mathematical formulations, modeling decisions, and domain-specific documentation.
 
-The target is:
+## Documentation Index
 
-```text
-weekly_change_bcf = this week's storage_bcf - last week's storage_bcf
-```
+Below is a summary of the available documentation files in this directory:
 
-A positive value is an injection into storage, while a negative value is a withdrawal.
+### 1. [Architecture Overview](architecture.md)
+*   **Filename**: `architecture.md`
+*   **Purpose**: Outlines the overall codebase layout, system flow (from raw caching to feature table generation and model execution), entry points (both CLI and Python APIs), data artifacts, and package module responsibilities.
+*   **When to read**: When onboarding to the project, adding/renaming modules, or understanding how the pipeline components connect.
 
-## Project overview
+### 2. [Mathematical Methodology](METHODOLOGY.md)
+*   **Filename**: `METHODOLOGY.md`
+*   **Purpose**: Details the mathematical formulations, OLS regressions (Residential & Commercial, Power Burn), downscaling procedures for dry production and lease/plant/pipeline fuel, basis spread projections, trend ratios, market tightness indicators, and the recursive state simulation algorithm.
+*   **When to read**: When investigating the physical/mathematical logic behind monthly-to-weekly data disaggregation, local balance sheets, or state transitions in multi-step forecast simulation.
 
-The pipeline:
+### 3. [Modeling Assumptions & Timing Contracts](modeling_assumptions.md)
+*   **Filename**: `modeling_assumptions.md`
+*   **Purpose**: Defines the strict contracts for data availability, recursive forecasting modes (seasonal, scenario, observed), feature timing, balance sheet inputs, prediction interval calibration (conformal prediction), and interpretation limitations to prevent data leakage and look-ahead bias.
+*   **When to read**: Before modifying model training loops, expanding features, or designing backtests.
 
-1. downloads and caches weekly storage data from the EIA API;
-2. downloads daily state-level weather data from Open-Meteo;
-3. aggregates weather to EIA storage regions using population weights;
-4. aligns daily weather with EIA Friday storage weeks;
-5. creates lagged, rolling, and seasonal features; and
-6. compares forecasting models with chronological backtests.
+### 4. [Power Fundamentals MVP](power_fundamentals.md)
+*   **Filename**: `power_fundamentals.md`
+*   **Purpose**: Details the ERCOT system-wide hourly power-fundamentals MVP, outlining the data contract, 168-hour physical stack identities, heat-rate based implied gas-burn scenario calculations, and CLI commands.
+*   **When to read**: When working with the `power_forecast` package, adding weather/price scenarios, or modifying the Streamlit dashboard fundamentals view.
 
-```text
-EIA storage data              Open-Meteo weather
-        |                              |
-        v                              v
- cleaned weekly data          state-level daily cache
-        |                              |
-        |                     population-weighted regions
-        |                              |
-        +---------------+--------------+
-                        |
-                        v
-              weekly feature table
-                        |
-                        v
-          expanding/rolling backtests
-```
+### 5. [Decision Log](decisions.md)
+*   **Filename**: `decisions.md`
+*   **Purpose**: A chronological record of key design and architecture decisions, their justifications, alternatives considered, tradeoffs, and revisit conditions.
+*   **When to read**: To understand *why* certain structural patterns (e.g. splitting weather downloads, adding explicit vintages, implementing conformal intervals) were adopted.
 
-## Repository structure
+---
 
-```text
-src/gas_forecast/
-  cli.py                  Command-line data refresh entry point
-  pipelines/data.py       End-to-end data pipeline orchestration
-  data/                   API clients, caching, cleaning, validation, and features
-  modeling/               Model configs, time-series splitters, training, and metrics
-  models/                 Smaller baseline model implementations
-  plotting.py             Forecast diagnostic plots
-```
+## Directory Conventions
 
-The main modeling dataset is written to:
-
-```text
-datasets/processed/lower48_weekly_model_features_latest.parquet
-```
-
-## Features
-
-The model table includes:
-
-- heating and cooling degree days;
-- lagged and rolling weather measures;
-- lagged weekly storage changes;
-- storage surplus or deficit relative to prior years;
-- cyclical week and month variables; and
-- injection and withdrawal season indicators.
-
-## Modeling and validation
-
-The final comparison uses the shared feature table with scikit-learn-compatible estimators. Models currently include Linear Regression, Ridge, ElasticNet, Random Forest, and HistGradientBoosting.
-
-Because the observations are ordered by week, the project does not use a random train/test split. It includes three chronological splitters:
-
-- `HoldoutSplitter` for one train and validation period;
-- `ExpandingWindowSplitter` for a growing training window; and
-- `RollingWindowSplitter` for a fixed-length moving window.
-
-The walkthrough notebook uses an expanding-window backtest. It begins with data from 2011 through 2020 as the first training period, then evaluates later 52-week blocks.
-
-## Current result
-
-The current Lower 48 expanding-window backtest produced:
-
-| Model | MAE | RMSE | Bias | Validation rows |
-| --- | ---: | ---: | ---: | ---: |
-| Linear Regression | 13.27 | 17.58 | 0.14 | 286 |
-| HistGradientBoosting | 15.18 | 20.98 | -2.08 | 286 |
-| Ridge | 15.47 | 21.07 | -0.41 | 286 |
-| Random Forest | 15.52 | 20.77 | -3.69 | 286 |
-
-The linear model performed best in this run. With one observation per week and a fairly small sample, the more flexible tree models did not improve out-of-sample error. That result is also a useful reminder to establish strong simple baselines before adding model complexity.
-
-## Run the project
-
-Install the package in editable mode:
-
-```bash
-python -m pip install -e ".[dev]"
-```
-
-Run the test suite:
-
-```bash
-python -m pytest
-```
-
-Refresh Lower 48 data:
-
-```bash
-gas-data refresh --region R48
-```
-
-Refresh all supported EIA regions:
-
-```bash
-gas-data refresh --all-regions
-```
-
-Run selected pipeline stages:
-
-```bash
-gas-data refresh --region R48 --only storage,weather,features
-```
-
-The best place to review the finished workflow is:
-
-```text
-notebooks/00_project_walkthrough.ipynb
-```
-
-## Limitations
-
-- The weather inputs are realized historical weather rather than forecast weather.
-- The model forecasts weekly storage changes, not natural gas prices.
-- Production, LNG exports, pipeline flows, power burn, and Henry Hub prices are not included.
-- Weekly frequency limits the sample size and makes simple benchmarks especially important.
-
-A more complete market forecast would add forward-looking weather and supply-demand fundamentals. For this project, I kept the scope focused on a reproducible data pipeline and a defensible time-series backtest.
+*   **Documentation Integrity**: Maintain consistent definitions and update these files whenever structural changes occur.
+*   **Referencing Files**: When linking between markdown files or package modules, use relative paths to keep links clickable and functional.

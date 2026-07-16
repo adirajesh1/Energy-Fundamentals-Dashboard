@@ -54,11 +54,9 @@ plots/                   Generated visual artifacts
 docs/                    Architecture notes and decision records
 dashboard/               Streamlit balance-analysis and forecast UI
 db/                      Reserved for persistent database work
-models/                  Reserved for trained model artifacts
 ```
 
-The `db/` and `models/` directories are placeholders. Either document their
-ownership when they gain runtime responsibilities or remove them.
+The `db/` directory is an empty placeholder. Either document its ownership when it gains runtime responsibilities or remove it.
 
 ## Package modules
 
@@ -66,8 +64,10 @@ ownership when they gain runtime responsibilities or remove them.
 | --- | --- |
 | `gas_forecast.cli` | Command-line entry point for data refresh workflows. |
 | `gas_forecast.pipelines.data` | Orchestrates storage, weather, and feature pipelines. |
+| `gas_forecast.pipelines.balance` | Orchestrates the weekly supply-demand balance sheet disaggregation pipeline. |
 | `gas_forecast.pipelines.asof` | Materializes selected weather scenarios and balance lag features from historical vintages. |
 | `gas_forecast.data.weather_scenarios` | Validates and selects the latest regional weather forecast known at an origin. |
+| `gas_forecast.data.balance_api` | EIA monthly state-level data and daily spot price API client and caching. |
 | `gas_forecast.data.balance_asof` | Validates balance vintages and builds point-in-time lag features. |
 | `gas_forecast.data.cache` | Shared parquet cache loading, atomic writing, time-series merging, and date-gap detection. |
 | `gas_forecast.data.paths` | Canonical local paths for cache and processed artifacts. |
@@ -86,8 +86,13 @@ ownership when they gain runtime responsibilities or remove them.
 | `gas_forecast.data.export` | Versioned parquet export with optional latest-file aliases. |
 | `gas_forecast.modeling.forecaster` | Recursive storage-state simulation with seasonal, archived-scenario, or observed input modes. |
 | `gas_forecast.modeling.backtesting` | One-step and recursive chronological backtest runners with optional conformal intervals. |
+| `gas_forecast.modeling.splitters` | Chronological data splitters (Holdout, Expanding Window, Rolling Window) for validation. |
+| `gas_forecast.modeling.config` | Central configuration factories, feature subsets, and default estimators. |
 | `gas_forecast.modeling.intervals` | Conformal interval calibration and empirical coverage diagnostics. |
+| `gas_forecast.modeling.evaluation` | Core evaluation functions (e.g. `evaluate_forecast`) and metrics (MAE, RMSE, Bias). |
+| `gas_forecast.modeling.interpret` | Feature importance diagnostics using permutation importance metrics. |
 | `gas_forecast.modeling.models` | Legacy seasonal models, a shared fit-history selector, and balance disaggregation components. |
+| `gas_forecast.llm.explain` | Gemini-based weekly market report generator and narrative commentator. |
 | `gas_forecast.plotting` | Standard Plotly forecast visualizations. |
 | `energy_forecast` | Shared append-only vintages, as-of selection, exact-timestamp rolling origins, metrics, and conformal intervals. |
 | `power_forecast.data` | ERCOT Public API, EIA-930, and archived weather adapters with canonical UTC schemas. |
@@ -120,7 +125,7 @@ Optional flags control stage selection, cache directories, processed output dire
 
 ### Python API
 
-The main callable workflows live in `gas_forecast.pipelines.data`:
+The main callable workflows live in `gas_forecast.pipelines.data` and `gas_forecast.pipelines.balance`:
 
 | Function | Purpose |
 | --- | --- |
@@ -129,6 +134,7 @@ The main callable workflows live in `gas_forecast.pipelines.data`:
 | `run_features_pipeline` | Join storage and weekly weather, build engineered model features, export feature table. |
 | `run_data_pipeline` | Run one or more stages for one region. |
 | `run_all_regions` | Run the selected stages for every supported region. |
+| `run_balance_pipeline` | Model and save weekly supply-demand balance sheet for a region. |
 
 ### Notebooks
 

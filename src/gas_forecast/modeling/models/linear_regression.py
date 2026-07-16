@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 
+from gas_forecast.data import add_calendar_features
 from gas_forecast.modeling.models.base import WeeklyChangeForecastModel
 from gas_forecast.modeling.models.training import select_training_history
 
@@ -22,19 +23,7 @@ def _fourier_features(
     return pd.DataFrame(features, index=frame.index)
 
 
-def _seasonal_features(frame: pd.DataFrame) -> pd.DataFrame:
-    dates = pd.to_datetime(frame["date"])
-    week_angle = 2 * np.pi * frame["week_of_year"] / 52.0
-    month_angle = 2 * np.pi * dates.dt.month / 12.0
-    return pd.DataFrame(
-        {
-            "week_sin": np.sin(week_angle),
-            "week_cos": np.cos(week_angle),
-            "month_sin": np.sin(month_angle),
-            "month_cos": np.cos(month_angle),
-        },
-        index=frame.index,
-    )
+# _seasonal_features was removed in favor of add_calendar_features from gas_forecast.data
 
 
 class WeeklyChangeLinearRegressionModel(WeeklyChangeForecastModel):
@@ -56,7 +45,7 @@ class WeeklyChangeLinearRegressionModel(WeeklyChangeForecastModel):
         )
         train = train.dropna(subset=["weekly_change_bcf"])
 
-        features = _seasonal_features(train)
+        features = add_calendar_features(train)[["week_sin", "week_cos", "month_sin", "month_cos"]]
         target = train["weekly_change_bcf"]
 
         self._model = LinearRegression().fit(features, target)
@@ -68,7 +57,7 @@ class WeeklyChangeLinearRegressionModel(WeeklyChangeForecastModel):
         if self._model is None or self._residual_std is None:
             raise RuntimeError("Call fit() before predict().")
 
-        features = _seasonal_features(evaluation)
+        features = add_calendar_features(evaluation)[["week_sin", "week_cos", "month_sin", "month_cos"]]
         predicted = self._model.predict(features)
 
         return pd.DataFrame(

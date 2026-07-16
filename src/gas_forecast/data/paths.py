@@ -25,6 +25,16 @@ def latest_processed_path(
     return Path(processed_dir) / f"{slug}_{dataset}_latest.parquet"
 
 
+def load_env_files() -> None:
+    """Load dotenv files from common locations."""
+    try:
+        from dotenv import load_dotenv
+        load_dotenv("local.env")
+        load_dotenv("notebooks/local.env")
+    except ImportError:
+        pass
+
+
 def resolve_api_key(api_key: str | None = None) -> str:
     """
     Resolve the EIA API key from parameters, env, or dotenv files.
@@ -40,12 +50,7 @@ def resolve_api_key(api_key: str | None = None) -> str:
     """
     if api_key:
         return api_key
-    try:
-        from dotenv import load_dotenv
-        load_dotenv("local.env")
-        load_dotenv("notebooks/local.env")
-    except ImportError:
-        pass
+    load_env_files()
     resolved = os.getenv("EIA_API_KEY")
     if not resolved:
         raise ValueError(

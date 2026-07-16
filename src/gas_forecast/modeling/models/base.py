@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 
 import pandas as pd
+from sklearn.base import BaseEstimator
 
 
-class WeeklyChangeForecastModel(ABC):
+class WeeklyChangeForecastModel(BaseEstimator, ABC):
     """Interface for weekly storage change forecast models."""
 
     @property
