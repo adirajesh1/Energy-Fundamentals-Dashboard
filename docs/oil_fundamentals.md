@@ -9,12 +9,12 @@ The model uses these EIA weekly series:
 
 | Component | EIA series | Published unit |
 | --- | --- | --- |
-| U.S. field production | `WCRFPUS2` | thousand barrels/day |
-| U.S. crude refinery inputs | `WCRRIUS2` | thousand barrels/day |
-| U.S. crude imports | `WCRIMUS2` | thousand barrels/day |
-| U.S. crude exports | `WCREXUS2` | thousand barrels/day |
-| Commercial crude stocks excluding SPR | `WCESTUS1` | thousand barrels |
-| SPR crude stocks | `WCSSTUS1` | thousand barrels |
+| U.S. field production | `PET.WCRFPUS2.W` | thousand barrels/day |
+| U.S. crude refinery inputs | `PET.WCRRIUS2.W` | thousand barrels/day |
+| U.S. crude imports | `PET.WCRIMUS2.W` | thousand barrels/day |
+| U.S. crude exports | `PET.WCREXUS2.W` | thousand barrels/day |
+| Commercial crude stocks excluding SPR | `PET.WCESTUS1.W` | thousand barrels |
+| SPR crude stocks | `PET.WCSSTUS1.W` | thousand barrels |
 
 The [EIA weekly supply table](https://www.eia.gov/dnav/pet/pet_sum_sndw_dcus_nus_w.htm)
 publishes stocks in thousand barrels and other volumes in thousand barrels per

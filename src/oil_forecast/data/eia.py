@@ -10,12 +10,12 @@ import requests
 
 EIA_SERIES_URL = "https://api.eia.gov/v2/seriesid/{series_id}"
 EIA_WEEKLY_CRUDE_SERIES = {
-    "production_kbpd": "WCRFPUS2",
-    "refinery_inputs_kbpd": "WCRRIUS2",
-    "imports_kbpd": "WCRIMUS2",
-    "exports_kbpd": "WCREXUS2",
-    "commercial_stocks_kb": "WCESTUS1",
-    "spr_stocks_kb": "WCSSTUS1",
+    "production_kbpd": "PET.WCRFPUS2.W",
+    "refinery_inputs_kbpd": "PET.WCRRIUS2.W",
+    "imports_kbpd": "PET.WCRIMUS2.W",
+    "exports_kbpd": "PET.WCREXUS2.W",
+    "commercial_stocks_kb": "PET.WCESTUS1.W",
+    "spr_stocks_kb": "PET.WCSSTUS1.W",
 }
 
 
@@ -59,12 +59,24 @@ def _fetch_series(
 
     records: list[dict[str, Any]] = []
     while True:
-        response = requests.get(
-            EIA_SERIES_URL.format(series_id=series_id),
-            params=params,
-            timeout=timeout,
-        )
-        response.raise_for_status()
+        for attempt in range(3):
+            try:
+                response = requests.get(
+                    EIA_SERIES_URL.format(series_id=series_id),
+                    params=params,
+                    timeout=timeout,
+                )
+                response.raise_for_status()
+                break
+            except requests.RequestException as exc:
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                retryable = status is None or status >= 500
+                if not retryable or attempt == 2:
+                    detail = f" (HTTP {status})" if status is not None else ""
+                    error_type = type(exc).__name__
+                    raise RuntimeError(
+                        f"EIA request failed for {series_id}{detail}: {error_type}."
+                    ) from None
         page = response.json().get("response", {}).get("data", [])
         records.extend(page)
         if len(page) < params["length"]:
@@ -103,4 +115,12 @@ def fetch_weekly_crude_series(
     result["value"] = pd.to_numeric(result["value"], errors="coerce")
     if result[["period", "value"]].isna().any().any():
         raise ValueError("EIA weekly crude data contains invalid dates or values.")
+    if start:
+        result = result.loc[result["period"] >= pd.Timestamp(start)]
+    if end:
+        result = result.loc[result["period"] <= pd.Timestamp(end)]
+    available = set(result["component"])
+    missing = sorted(set(EIA_WEEKLY_CRUDE_SERIES) - available)
+    if missing:
+        raise ValueError(f"EIA returned no weekly data in range for: {missing}")
     return result.sort_values(["period", "component"]).reset_index(drop=True)
