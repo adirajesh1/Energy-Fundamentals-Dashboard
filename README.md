@@ -1,6 +1,4 @@
-# Natural Gas Storage Forecasting
-
-An open, reproducible project for answering a practical market question: **how much will U.S. natural gas storage change next week?**
+# Energy Fundamentals Dashboard
 
 The repository started as a Lower 48 storage model and has grown into a small energy-fundamentals lab. Natural gas is still the main event, with companion pipelines for ERCOT power and U.S. crude oil. Everything is built around public data, point-in-time evaluation, and models that are simple enough to inspect.
 
